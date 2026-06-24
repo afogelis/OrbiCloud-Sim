@@ -152,6 +152,12 @@ class RoutingConfig(BaseModel):
     max_ground_link_km: float = Field(
         gt=0, default=2500.0, description="Maximum ground-station to satellite optical/RF link range."
     )
+    min_ground_elevation_deg: float = Field(
+        ge=0,
+        le=90,
+        default=10.0,
+        description="Minimum elevation angle above the local horizon for a usable ground link.",
+    )
     infeasible_penalty_s: float = Field(
         gt=0,
         default=1.0e6,
@@ -203,8 +209,11 @@ class SimulationConfig(BaseModel):
 
     workload_gflops: float = Field(
         gt=0,
-        default=5.0e4,
-        description="Size of a single AI compute job offered each timestep, in GFLOP.",
+        default=1.0e7,
+        description=(
+            "AI compute work offered each timestep, in GFLOP. Delivered compute is the "
+            "smaller of this and the assigned node's throughput over one timestep."
+        ),
     )
 
     @property
@@ -263,8 +272,8 @@ def default_simulation_config() -> SimulationConfig:
 
     constellation = ConstellationConfig(
         walker=WalkerDeltaConfig(
-            num_planes=6,
-            sats_per_plane=6,
+            num_planes=8,
+            sats_per_plane=12,
             altitude_km=550.0,
             inclination_deg=53.0,
             phasing_f=1,
@@ -273,7 +282,11 @@ def default_simulation_config() -> SimulationConfig:
         compute_profile=default_compute_profile(),
         relay_profile=default_relay_profile(),
     )
+    # An equatorial station sits well inside a 53-degree constellation's coverage,
+    # so it has frequent satellite passes; Svalbard (78N) would never see a 53-deg
+    # orbit. With 12 sats per plane, in-plane neighbors are ~3960 km apart, within
+    # the ~5000 km Earth-limb ISL range, so the mesh is connected.
     ground_station = GroundStationConfig(
-        name="Svalbard", latitude_deg=78.23, longitude_deg=15.39, elevation_m=450.0
+        name="Kourou", latitude_deg=5.16, longitude_deg=-52.65, elevation_m=10.0
     )
     return SimulationConfig(constellation=constellation, ground_station=ground_station)

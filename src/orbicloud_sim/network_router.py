@@ -129,7 +129,12 @@ def advance_state(state: NodeState, in_eclipse: bool, is_computing: bool, dt_s: 
 
 
 def line_of_sight(a_km: np.ndarray, b_km: np.ndarray, blocking_radius_km: float) -> bool:
-    """Return True if the segment a->b does not pass below ``blocking_radius_km``."""
+    """Return True if the segment a->b does not pass below ``blocking_radius_km``.
+
+    Intended for satellite-to-satellite links, where both endpoints sit well above
+    the blocking sphere. It is not suitable for ground links, whose endpoint lies on
+    the surface (use :func:`ground_visible` instead).
+    """
 
     segment = b_km - a_km
     seg_len_sq = float(np.dot(segment, segment))
@@ -138,6 +143,29 @@ def line_of_sight(a_km: np.ndarray, b_km: np.ndarray, blocking_radius_km: float)
     t_closest = float(np.clip(-np.dot(a_km, segment) / seg_len_sq, 0.0, 1.0))
     closest_point = a_km + t_closest * segment
     return float(np.linalg.norm(closest_point)) >= blocking_radius_km
+
+
+def ground_visible(
+    ground_km: np.ndarray, sat_km: np.ndarray, min_elevation_deg: float
+) -> bool:
+    """Return True if ``sat_km`` is above the ground station's local horizon.
+
+    The elevation angle is measured between the local geocentric vertical at the
+    station and the line of sight to the satellite. This correctly handles a
+    surface-level endpoint, unlike the inter-satellite occlusion test.
+    """
+
+    ground_norm = float(np.linalg.norm(ground_km))
+    if ground_norm == 0.0:
+        return False
+    up_hat = ground_km / ground_norm
+    line_of_sight_vec = sat_km - ground_km
+    los_norm = float(np.linalg.norm(line_of_sight_vec))
+    if los_norm == 0.0:
+        return False
+    sin_elevation = float(np.dot(up_hat, line_of_sight_vec / los_norm))
+    elevation_deg = np.degrees(np.arcsin(np.clip(sin_elevation, -1.0, 1.0)))
+    return elevation_deg >= min_elevation_deg
 
 
 def build_isl_graph(
@@ -184,7 +212,7 @@ def build_isl_graph(
         distance = float(np.linalg.norm(pos_a - ground_position))
         if distance > config.routing.max_ground_link_km:
             continue
-        if not line_of_sight(ground_position, pos_a, blocking_radius):
+        if not ground_visible(ground_position, pos_a, config.routing.min_ground_elevation_deg):
             continue
         graph.add_edge(
             GROUND_NODE_ID, id_a, distance_km=distance, latency_s=distance / SPEED_OF_LIGHT_KM_S
@@ -298,6 +326,14 @@ def run_simulation(config: SimulationConfig) -> SimulationResult:
         graph = build_isl_graph(positions, satellites, ground_position, config)
         route = find_compute_route(graph, states, config)
 
+        # Compute actually delivered this step: the assigned node runs at its rated
+        # throughput for the timestep, capped by the offered workload.
+        delivered_gflops = 0.0
+        if route.feasible and route.compute_node_id is not None:
+            node_tflops = states[route.compute_node_id].profile.compute_power_tflops
+            capacity_gflops = node_tflops * dt_s * 1000.0
+            delivered_gflops = float(min(config.workload_gflops, capacity_gflops))
+
         eligible_compute = sum(
             1 for s in states.values() if s.role is NodeRole.COMPUTE and s.is_compute_eligible()
         )
@@ -315,6 +351,7 @@ def run_simulation(config: SimulationConfig) -> SimulationResult:
                 "route_latency_ms": route.latency_s * 1e3 if route.feasible else np.nan,
                 "route_distance_km": route.distance_km if route.feasible else np.nan,
                 "compute_node_id": route.compute_node_id if route.feasible else -1,
+                "delivered_gflops": delivered_gflops,
                 "eligible_compute_nodes": eligible_compute,
                 "mean_battery_fraction": mean_soc,
                 "mean_compute_temp_c": mean_temp,

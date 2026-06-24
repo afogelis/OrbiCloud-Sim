@@ -39,7 +39,7 @@ class EconomicsResult:
         return asdict(self)
 
 
-def _terrestrial_energy_kwh_for_job(gflops: float, econ: EconomicConfig) -> float:
+def _terrestrial_energy_kwh(gflops: float, econ: EconomicConfig) -> float:
     """Energy a terrestrial datacenter would burn to execute ``gflops`` of work."""
 
     seconds = (gflops / GFLOP_PER_TFLOP) / econ.terrestrial_gpu_tflops
@@ -70,13 +70,14 @@ class EconomicsModel:
         """Return the full set of economic metrics for ``result`` (RORO)."""
 
         telemetry = result.telemetry
-        jobs_completed = int(telemetry["route_feasible"].sum()) if len(telemetry) else 0
-        workload_gflops = self.config.workload_gflops
-        total_gflops = jobs_completed * workload_gflops
+        if len(telemetry):
+            jobs_completed = int(telemetry["route_feasible"].sum())
+            total_gflops = float(telemetry["delivered_gflops"].sum())
+        else:
+            jobs_completed = 0
+            total_gflops = 0.0
 
-        terrestrial_energy_kwh = jobs_completed * _terrestrial_energy_kwh_for_job(
-            workload_gflops, self.econ
-        )
+        terrestrial_energy_kwh = _terrestrial_energy_kwh(total_gflops, self.econ)
         carbon_offset_kg = terrestrial_energy_kwh * self.econ.grid_carbon_kg_per_kwh
         grid_cost_saved_usd = terrestrial_energy_kwh * self.econ.grid_cost_per_kwh_usd
         carbon_value_usd = (carbon_offset_kg / KG_PER_TON) * self.econ.carbon_price_per_ton_usd

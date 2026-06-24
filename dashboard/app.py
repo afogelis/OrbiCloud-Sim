@@ -19,6 +19,12 @@ _SRC = Path(__file__).resolve().parent.parent / "src"
 if str(_SRC) not in sys.path:
     sys.path.insert(0, str(_SRC))
 
+from visualizers import (  # noqa: E402
+    render_economics_bar,
+    render_globe,
+    render_telemetry,
+)
+
 from orbicloud_sim.config import (  # noqa: E402
     ConstellationConfig,
     GroundStationConfig,
@@ -29,12 +35,6 @@ from orbicloud_sim.config import (  # noqa: E402
 )
 from orbicloud_sim.economics import EconomicsModel  # noqa: E402
 from orbicloud_sim.network_router import run_simulation  # noqa: E402
-
-from visualizers import (  # noqa: E402
-    render_economics_bar,
-    render_globe,
-    render_telemetry,
-)
 
 st.set_page_config(page_title="OrbiCloud-Sim", layout="wide")
 
@@ -56,8 +56,11 @@ def _run(config_json: str) -> dict:
 
 def _build_config() -> SimulationConfig:
     st.sidebar.header("Constellation")
-    num_planes = st.sidebar.slider("Orbital planes", 2, 24, 6)
-    sats_per_plane = st.sidebar.slider("Satellites per plane", 2, 24, 6)
+    num_planes = st.sidebar.slider("Orbital planes", 2, 24, 8)
+    sats_per_plane = st.sidebar.slider(
+        "Satellites per plane", 2, 24, 12,
+        help="At 550 km the Earth-limb ISL range is ~5000 km; >=10 per plane keeps the mesh connected.",
+    )
     altitude_km = st.sidebar.slider("Altitude (km)", 350, 1200, 550, step=10)
     inclination_deg = st.sidebar.slider("Inclination (deg)", 0.0, 110.0, 53.0, step=1.0)
     compute_fraction = st.sidebar.slider("Compute-node fraction", 0.0, 1.0, 0.5, step=0.05)
@@ -65,14 +68,19 @@ def _build_config() -> SimulationConfig:
 
     st.sidebar.header("Workload & timeline")
     workload_gflops = st.sidebar.number_input(
-        "Job size (GFLOP)", min_value=1.0e3, max_value=1.0e7, value=5.0e4, step=1.0e3
+        "Offered work per step (GFLOP)",
+        min_value=1.0e3,
+        max_value=1.0e8,
+        value=1.0e7,
+        step=1.0e6,
+        help="Delivered compute is capped by the assigned node's throughput per timestep.",
     )
     duration_min = st.sidebar.slider("Duration (minutes)", 10, 240, 100, step=10)
     timestep_s = st.sidebar.slider("Timestep (s)", 30, 300, 60, step=30)
 
     st.sidebar.header("Ground station")
-    latitude_deg = st.sidebar.number_input("Latitude (deg)", -90.0, 90.0, 78.23)
-    longitude_deg = st.sidebar.number_input("Longitude (deg)", -180.0, 180.0, 15.39)
+    latitude_deg = st.sidebar.number_input("Latitude (deg)", -90.0, 90.0, 5.16)
+    longitude_deg = st.sidebar.number_input("Longitude (deg)", -180.0, 180.0, -52.65)
 
     constellation = ConstellationConfig(
         walker=WalkerDeltaConfig(
