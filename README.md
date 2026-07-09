@@ -170,7 +170,7 @@ hand-tuned. Economics are reported under two lenses:
 | Compute-node CapEx (subset) | .4 M |
 | **Fleet CapEx — cost per GFLOP** | **.90×10⁻⁵** |
 | **Fleet CapEx — break-even** | **~2.12×10⁵ months (~17,650 years)** |
-| **Utilized compute — cost per GFLOP** | **.25×10⁻⁵** |
+| **Utilized compute — cost per GFLOP** | **$3.25×10⁻⁵** |
 | **Utilized compute — break-even** | **~1.77×10⁵ months (~14,730 years)** |
 
 Under these baseline assumptions both horizons remain CapEx-dominated: a full
