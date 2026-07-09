@@ -26,8 +26,10 @@ from .orbital_engine import (
     build_timescale,
     generate_walker_delta,
     ground_station_position,
+    ground_station_position_ecef,
     is_in_eclipse,
     propagate,
+    propagate_ecef,
 )
 
 SPEED_OF_LIGHT_KM_S: float = 299792.458
@@ -329,7 +331,9 @@ def run_simulation(config: SimulationConfig) -> SimulationResult:
 
     for step, t in enumerate(timeline):
         positions = propagate(satellites, t)
+        positions_ecef = propagate_ecef(satellites, t)
         ground_position = ground_station_position(config.ground_station, t)
+        ground_position_ecef = ground_station_position_ecef(config.ground_station, t)
 
         # Advance node state: compute nodes run work whenever they are eligible.
         for sat in satellites:
@@ -377,11 +381,12 @@ def run_simulation(config: SimulationConfig) -> SimulationResult:
             {
                 "step": step,
                 "time_s": step * dt_s,
-                "ground_position_km": ground_position,
+                # Globe rendering uses Earth-fixed coordinates so continents stay put.
+                "ground_position_km": ground_position_ecef,
                 "route_path": route.path,
                 "nodes": {
                     sat.sat_id: {
-                        "position_km": positions[sat.sat_id],
+                        "position_km": positions_ecef[sat.sat_id],
                         "role": states[sat.sat_id].role,
                         "battery_fraction": states[sat.sat_id].battery_fraction,
                         "temperature_c": states[sat.sat_id].temperature_c,

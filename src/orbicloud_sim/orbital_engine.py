@@ -14,6 +14,7 @@ from dataclasses import dataclass
 
 import numpy as np
 from skyfield.api import EarthSatellite, load, wgs84
+from skyfield.framelib import itrs
 from skyfield.timelib import Time, Timescale
 
 from .config import ConstellationConfig, GroundStationConfig, NodeRole, SatelliteHardwareConfig
@@ -220,6 +221,19 @@ def propagate(satellites: list[Satellite], t: Time) -> dict[int, np.ndarray]:
     return positions
 
 
+def propagate_ecef(satellites: list[Satellite], t: Time) -> dict[int, np.ndarray]:
+    """Return satellite positions in Earth-fixed ITRS/ECEF coordinates (km).
+
+    ECEF keeps continents fixed under the constellation, which is required for a
+    textured Earth globe. Physics (eclipse, LOS) continues to use ECI.
+    """
+
+    positions: dict[int, np.ndarray] = {}
+    for sat in satellites:
+        positions[sat.sat_id] = np.asarray(sat.body.at(t).frame_xyz(itrs).km, dtype=float)
+    return positions
+
+
 def ground_station_position(
     station: GroundStationConfig,
     t: Time,
@@ -230,6 +244,29 @@ def ground_station_position(
         station.latitude_deg, station.longitude_deg, elevation_m=station.elevation_m
     )
     return np.asarray(location.at(t).position.km, dtype=float)
+
+
+def ground_station_position_ecef(
+    station: GroundStationConfig,
+    t: Time,
+) -> np.ndarray:
+    """Return the ground-station position in Earth-fixed ITRS/ECEF coordinates (km)."""
+
+    location = wgs84.latlon(
+        station.latitude_deg, station.longitude_deg, elevation_m=station.elevation_m
+    )
+    return np.asarray(location.at(t).frame_xyz(itrs).km, dtype=float)
+
+
+def latlon_to_ecef_unit(latitude_deg: float, longitude_deg: float) -> np.ndarray:
+    """Return a unit ECEF vector pointing toward ``(latitude, longitude)``."""
+
+    lat = math.radians(latitude_deg)
+    lon = math.radians(longitude_deg)
+    return np.array(
+        [math.cos(lat) * math.cos(lon), math.cos(lat) * math.sin(lon), math.sin(lat)],
+        dtype=float,
+    )
 
 
 def sun_unit_vector_eci(t: Time) -> np.ndarray:

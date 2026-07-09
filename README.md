@@ -88,7 +88,7 @@ Combined dashboard (globe, economics, and telemetry):
 
 ![OrbiCloud-Sim dashboard](docs/images/dashboard.png)
 
-3D constellation globe with NASA Blue Marble Earth texture:
+3D constellation globe with NASA Blue Marble Earth texture (continental US view):
 
 ![Constellation globe](docs/images/globe.png)
 
@@ -96,7 +96,7 @@ Telemetry time series:
 
 ![Telemetry](docs/images/telemetry.png)
 
-Space vs terrestrial economics:
+Unit-cost and impact comparison (avoids short-window capex scale distortion):
 
 ![Economics](docs/images/economics.png)
 

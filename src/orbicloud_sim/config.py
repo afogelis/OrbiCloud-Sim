@@ -311,11 +311,13 @@ def default_simulation_config() -> SimulationConfig:
         compute_profile=default_compute_profile(),
         relay_profile=default_relay_profile(),
     )
-    # An equatorial station sits well inside a 53-degree constellation's coverage,
-    # so it has frequent satellite passes; Svalbard (78N) would never see a 53-deg
-    # orbit. With 12 sats per plane, in-plane neighbors are ~3960 km apart, within
-    # the ~5000 km Earth-limb ISL range, so the mesh is connected.
+    # Cape Canaveral sits under a 53-degree Walker shell with frequent passes.
+    # With 12 sats per plane, in-plane neighbors are ~3960 km apart, within the
+    # ~5000 km Earth-limb ISL range, so the mesh stays connected.
     ground_station = GroundStationConfig(
-        name="Kourou", latitude_deg=5.16, longitude_deg=-52.65, elevation_m=10.0
+        name="Cape Canaveral",
+        latitude_deg=28.39,
+        longitude_deg=-80.60,
+        elevation_m=3.0,
     )
     return SimulationConfig(constellation=constellation, ground_station=ground_station)

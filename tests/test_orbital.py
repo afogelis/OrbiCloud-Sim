@@ -296,3 +296,14 @@ def test_earth_texture_loads():
     assert indexed.ndim == 2
     assert len(colorscale) <= 65
     assert indexed.shape == (image.height, image.width)
+
+
+def test_latlon_to_ecef_points_to_continental_us():
+    from orbicloud_sim.orbital_engine import latlon_to_ecef_unit
+
+    # Contiguous-US geographic center: western hemisphere (x<0, y<0 in ECEF) and north (z>0).
+    vec = latlon_to_ecef_unit(39.8, -98.5)
+    assert vec[0] < 0.0
+    assert vec[1] < 0.0
+    assert vec[2] > 0.0
+    assert math.isclose(float(np.linalg.norm(vec)), 1.0, rel_tol=1e-9)

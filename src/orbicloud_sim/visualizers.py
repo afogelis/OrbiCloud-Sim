@@ -18,7 +18,7 @@ from PIL import Image
 from .config import NodeRole
 from .economics import EconomicsResult
 from .network_router import GROUND_NODE_ID, SimulationResult
-from .orbital_engine import EARTH_RADIUS_KM
+from .orbital_engine import EARTH_RADIUS_KM, latlon_to_ecef_unit
 
 # Modern dashboard palette (cool slate + cyan accents; avoid purple/glow defaults).
 BG = "#0b1220"
@@ -37,6 +37,12 @@ EARTH_TEXTURE_NAME = "earth_day.jpg"
 EARTH_TEXTURE_MAX_WIDTH = 512
 # Kaleido/WebGL colorscales blow up above a few hundred stops; keep a tight palette.
 EARTH_PALETTE_COLORS = 64
+
+
+# Default globe look-at: continental United States (geographic center).
+GLOBE_FOCUS_LAT_DEG: float = 39.8
+GLOBE_FOCUS_LON_DEG: float = -98.5
+GLOBE_CAMERA_DISTANCE: float = 1.85
 
 
 def _base_layout(**overrides: object) -> dict:
@@ -133,10 +139,8 @@ def _earth_mesh() -> list[go.Surface]:
     """Realistic Earth sphere with Blue Marble texture plus a thin atmosphere shell."""
 
     image = _load_earth_texture()
-    # Equirectangular maps are lon x lat; Plotly Surface expects (u, v) with
-    # u along columns (longitude) and v along rows (colatitude).
-    texture = image.transpose(Image.Transpose.FLIP_TOP_BOTTOM)
-    indexed, colorscale = _rgb_to_indexed_texture(texture)
+    # Equirectangular Blue Marble: top = +90 lat, left = -180 lon. Do not flip.
+    indexed, colorscale = _rgb_to_indexed_texture(image)
 
     n_lat, n_lon = indexed.shape
     lon = np.linspace(-np.pi, np.pi, n_lon)
@@ -153,7 +157,7 @@ def _earth_mesh() -> list[go.Surface]:
         z=z,
         surfacecolor=indexed,
         cmin=0,
-        cmax=max(indexed.max(), 1.0),
+        cmax=max(float(indexed.max()), 1.0),
         colorscale=colorscale,
         showscale=False,
         hoverinfo="skip",
@@ -183,6 +187,21 @@ def _earth_mesh() -> list[go.Surface]:
         lighting=dict(ambient=1.0, diffuse=0.0, fresnel=0.0, specular=0.0),
     )
     return [earth, atmosphere]
+
+
+def _globe_camera(
+    latitude_deg: float = GLOBE_FOCUS_LAT_DEG,
+    longitude_deg: float = GLOBE_FOCUS_LON_DEG,
+    distance: float = GLOBE_CAMERA_DISTANCE,
+) -> dict:
+    """Camera aimed at a geographic focus with north toward +Z."""
+
+    eye = latlon_to_ecef_unit(latitude_deg, longitude_deg) * distance
+    return dict(
+        eye=dict(x=float(eye[0]), y=float(eye[1]), z=float(eye[2])),
+        up=dict(x=0.0, y=0.0, z=1.0),
+        center=dict(x=0.0, y=0.0, z=0.0),
+    )
 
 
 def _node_color(role: NodeRole, eligible: bool) -> str:
@@ -270,7 +289,7 @@ def render_globe(result: SimulationResult, step: int) -> go.Figure:
                 zaxis=_scene_axes(),
                 aspectmode="data",
                 bgcolor=BG,
-                camera=dict(eye=dict(x=1.35, y=1.15, z=0.85)),
+                camera=_globe_camera(),
             ),
         )
     )
@@ -353,39 +372,81 @@ def render_telemetry(result: SimulationResult) -> go.Figure:
 
 
 def render_economics(economics: EconomicsResult) -> go.Figure:
-    """Bar chart comparing terrestrial savings to orbital compute cost."""
+    """Compare unit compute cost and terrestrial impacts avoided.
 
-    labels = ["Grid cost saved", "Carbon value", "GPU rental avoided", "Space compute cost"]
-    values = [
-        economics.grid_cost_saved_usd,
-        economics.carbon_value_usd,
-        economics.terrestrial_rental_usd,
-        economics.space_compute_cost_usd,
-    ]
-    colors = [COLOR_COMPUTE_OK, COLOR_RELAY, COLOR_GROUND, COLOR_COMPUTE_THROTTLED]
-    fig = go.Figure(
-        go.Bar(
-            x=labels,
-            y=values,
-            marker=dict(color=colors, line=dict(width=0)),
-            text=[f"${v:,.0f}" for v in values],
-            textposition="outside",
-            textfont=dict(color=MUTED, size=11),
-            hovertemplate="%{x}<br>$%{y:,.2f}<extra></extra>",
-        )
+    Short simulation windows make absolute USD savings look tiny next to amortized
+    constellation capex. Unit cost ($/GFLOP) and physical offsets (kWh, kg CO2)
+    show the operational benefit without that scale mismatch.
+    """
+
+    terrestrial_cost_per_gflop, space_cost_per_gflop = _unit_costs(economics)
+
+    fig = make_subplots(
+        rows=1,
+        cols=2,
+        subplot_titles=("Cost per GFLOP", "Impact avoided this run"),
+        column_widths=[0.48, 0.52],
+        horizontal_spacing=0.12,
     )
+
+    fig.add_trace(_cost_per_gflop_trace(terrestrial_cost_per_gflop, space_cost_per_gflop), row=1, col=1)
+    fig.add_trace(_impact_trace(economics), row=1, col=2)
+
     fig.update_layout(
         **_base_layout(
-            title="Space vs terrestrial value",
-            height=400,
-            yaxis=dict(title="USD", color=MUTED),
-            xaxis=dict(title=""),
-            uniformtext_minsize=10,
-            uniformtext_mode="hide",
+            title="Space vs terrestrial economics",
+            height=420,
+            margin=dict(l=48, r=24, t=72, b=48),
         )
     )
+    fig.update_annotations(font=dict(color=MUTED, size=13))
+    fig.update_yaxes(title_text="USD / GFLOP", type="log", row=1, col=1)
+    fig.update_yaxes(title_text="Avoided amount", row=1, col=2)
     _style_cartesian(fig)
     return fig
+
+
+def _unit_costs(economics: EconomicsResult) -> tuple[float, float]:
+    if economics.total_gflops <= 0:
+        return float("nan"), float("nan")
+    terrestrial = (economics.terrestrial_rental_usd + economics.grid_cost_saved_usd) / economics.total_gflops
+    return terrestrial, economics.cost_per_gflop_usd
+
+
+def _cost_per_gflop_trace(terrestrial: float, orbital: float) -> go.Bar:
+    return go.Bar(
+        x=["Terrestrial", "Orbital"],
+        y=[terrestrial, orbital],
+        marker=dict(color=[COLOR_RELAY, COLOR_COMPUTE_OK], line=dict(width=0)),
+        text=[f"${terrestrial:.2e}", f"${orbital:.2e}"],
+        textposition="outside",
+        textfont=dict(color=MUTED, size=11),
+        hovertemplate="%{x}<br>$%{y:.3e} / GFLOP<extra></extra>",
+        showlegend=False,
+        name="Cost / GFLOP",
+    )
+
+
+def _impact_trace(economics: EconomicsResult) -> go.Bar:
+    return go.Bar(
+        x=["Energy (kWh)", "Carbon (kg CO₂)", "GPU rental (USD)"],
+        y=[
+            economics.terrestrial_energy_kwh,
+            economics.carbon_offset_kg,
+            economics.terrestrial_rental_usd,
+        ],
+        marker=dict(color=[COLOR_COMPUTE_OK, COLOR_RELAY, COLOR_GROUND], line=dict(width=0)),
+        text=[
+            f"{economics.terrestrial_energy_kwh:.2f}",
+            f"{economics.carbon_offset_kg:.2f}",
+            f"${economics.terrestrial_rental_usd:.2f}",
+        ],
+        textposition="outside",
+        textfont=dict(color=MUTED, size=11),
+        hovertemplate="%{x}<br>%{y:.4g}<extra></extra>",
+        showlegend=False,
+        name="Impact avoided",
+    )
 
 
 def render_dashboard(result: SimulationResult, economics: EconomicsResult, step: int = 0) -> go.Figure:
@@ -396,8 +457,8 @@ def render_dashboard(result: SimulationResult, economics: EconomicsResult, step:
     step = int(np.clip(step, 0, len(result.snapshots) - 1))
 
     globe = render_globe(result, step)
-    econ = render_economics(economics)
     telem = render_telemetry(result)
+    terrestrial_cost, orbital_cost = _unit_costs(economics)
 
     fig = make_subplots(
         rows=2,
@@ -410,7 +471,7 @@ def render_dashboard(result: SimulationResult, economics: EconomicsResult, step:
         row_heights=[0.5, 0.5],
         subplot_titles=(
             f"Constellation · step {step}",
-            "Space vs terrestrial value",
+            "Cost per GFLOP",
             "Telemetry",
         ),
         vertical_spacing=0.10,
@@ -419,8 +480,7 @@ def render_dashboard(result: SimulationResult, economics: EconomicsResult, step:
 
     for trace in globe.data:
         fig.add_trace(trace, row=1, col=1)
-    for trace in econ.data:
-        fig.add_trace(trace, row=1, col=2)
+    fig.add_trace(_cost_per_gflop_trace(terrestrial_cost, orbital_cost), row=1, col=2)
     for trace in telem.data:
         fig.add_trace(trace, row=2, col=2)
 
@@ -443,12 +503,12 @@ def render_dashboard(result: SimulationResult, economics: EconomicsResult, step:
                 zaxis=_scene_axes(),
                 aspectmode="data",
                 bgcolor=BG,
-                camera=dict(eye=dict(x=1.35, y=1.15, z=0.85)),
+                camera=_globe_camera(),
             ),
         )
     )
     fig.update_annotations(font=dict(color=MUTED, size=13))
-    fig.update_yaxes(title_text="USD", row=1, col=2)
+    fig.update_yaxes(title_text="USD / GFLOP", type="log", row=1, col=2)
     fig.update_xaxes(title_text="Time (minutes)", row=2, col=2)
     fig.update_yaxes(title_text="Battery SoC (%)", range=[0, 100], row=2, col=2)
     _style_cartesian(fig)
