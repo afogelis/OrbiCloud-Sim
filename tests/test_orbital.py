@@ -284,3 +284,15 @@ def test_export_writes_csvs_and_html_visualizations(tmp_path):
     for path in written.values():
         assert path.exists()
         assert path.stat().st_size > 0
+
+
+def test_earth_texture_loads():
+    from orbicloud_sim.visualizers import _load_earth_texture, _rgb_to_indexed_texture
+
+    image = _load_earth_texture()
+    assert image.mode == "RGB"
+    assert image.width > 50 and image.height > 50
+    indexed, colorscale = _rgb_to_indexed_texture(image)
+    assert indexed.ndim == 2
+    assert len(colorscale) <= 65
+    assert indexed.shape == (image.height, image.width)

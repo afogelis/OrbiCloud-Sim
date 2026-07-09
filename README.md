@@ -88,7 +88,7 @@ Combined dashboard (globe, economics, and telemetry):
 
 ![OrbiCloud-Sim dashboard](docs/images/dashboard.png)
 
-3D constellation globe (nodes colored by compute eligibility):
+3D constellation globe with NASA Blue Marble Earth texture:
 
 ![Constellation globe](docs/images/globe.png)
 

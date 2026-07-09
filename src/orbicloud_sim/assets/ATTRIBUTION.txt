@@ -1,0 +1,9 @@
+NASA Visible Earth — Blue Marble: Land Surface, Shallow Water, and Shaded Topography
+
+Source:
+https://visibleearth.nasa.gov/images/57752/blue-marble-land-surface-shallow-water-and-shaded-topography
+
+File used in this package: earth_day.jpg
+(resized locally for packaging; original NASA imagery)
+
+Credit: NASA Goddard Space Flight Center. Public domain / NASA media usage guidelines apply.
