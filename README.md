@@ -46,6 +46,7 @@ OrbiCloud-Sim/
 │   ├── visualizers.py       # Plotly 3D globe and metric charts
 │   ├── export.py            # CSV tables + HTML visualization writers
 │   └── cli.py               # Headless runner (orbicloud)
+├── docs/images/             # README dashboard screenshots
 ├── tests/test_orbital.py
 ├── pyproject.toml
 └── README.md
@@ -80,6 +81,24 @@ Omit `--output` to print only the console summary:
 ```bash
 orbicloud --planes 8 --per-plane 8 --altitude-km 550 --duration-s 6000
 ```
+
+## Dashboard screenshots
+
+Combined dashboard (globe, economics, and telemetry):
+
+![OrbiCloud-Sim dashboard](docs/images/dashboard.png)
+
+3D constellation globe (nodes colored by compute eligibility):
+
+![Constellation globe](docs/images/globe.png)
+
+Telemetry time series:
+
+![Telemetry](docs/images/telemetry.png)
+
+Space vs terrestrial economics:
+
+![Economics](docs/images/economics.png)
 
 ## Testing
 
