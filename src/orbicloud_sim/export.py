@@ -120,8 +120,18 @@ def economics_breakdown_frame(economics: EconomicsResult) -> pd.DataFrame:
             },
             {
                 "metric": "space_compute_cost_usd",
-                "label": "Amortized CapEx (window)",
+                "label": "Amortized fleet CapEx (window)",
                 "value_usd": economics.space_compute_cost_usd,
+            },
+            {
+                "metric": "cost_per_gflop_usd",
+                "label": "Fleet $/GFLOP",
+                "value_usd": economics.cost_per_gflop_usd,
+            },
+            {
+                "metric": "utilized_cost_per_gflop_usd",
+                "label": "Utilized $/GFLOP",
+                "value_usd": economics.utilized_cost_per_gflop_usd,
             },
             {"metric": "net_value_usd", "label": "Net value", "value_usd": economics.net_value_usd},
         ]

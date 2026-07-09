@@ -241,6 +241,16 @@ class EconomicConfig(BaseModel):
         default=2.50,
         description="Reference cloud GPU rental rate (e.g. H100-class), USD per hour.",
     )
+    assumed_compute_utilization: float | None = Field(
+        default=None,
+        ge=0,
+        le=1,
+        description=(
+            "Optional override for the utilized-compute TCO lens. When set, lifetime "
+            "GFLOP amortization uses this duty cycle instead of the run's observed "
+            "utilization (delivered / peak compute capacity)."
+        ),
+    )
 
 
 class SimulationConfig(BaseModel):

@@ -9,15 +9,21 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-from .config import default_simulation_config
 from .economics import EconomicsModel
 from .export import export_results
 from .network_router import run_simulation
+from .presets import PRESET_NAMES, load_preset
 
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="Run an OrbiCloud-Sim scenario and optionally export results."
+    )
+    parser.add_argument(
+        "--preset",
+        choices=PRESET_NAMES,
+        default="baseline_550",
+        help="Named scenario preset (default: baseline_550).",
     )
     parser.add_argument("--planes", type=int, default=None, help="Override number of orbital planes.")
     parser.add_argument(
@@ -45,9 +51,17 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _format_months(months: float) -> str:
+    if months == float("inf"):
+        return "inf"
+    if months >= 1200.0:
+        return f"{months:.0f} months ({months / 12.0:.0f} years)"
+    return f"{months:.1f} months"
+
+
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
-    config = default_simulation_config()
+    config = load_preset(args.preset)
 
     walker = config.constellation.walker
     if args.planes is not None:
@@ -66,6 +80,7 @@ def main(argv: list[str] | None = None) -> int:
 
     summary = EconomicsModel(config).constellation_summary(result)
     print("OrbiCloud-Sim run complete")
+    print(f"  Preset        : {args.preset}")
     print(
         f"  Constellation : {summary['total']} sats "
         f"({summary['compute_nodes']} compute / {summary['relay_nodes']} relay)"
@@ -73,14 +88,20 @@ def main(argv: list[str] | None = None) -> int:
     print(f"  Timesteps     : {len(result.telemetry)}")
     print(f"  Jobs routed   : {economics.jobs_completed}")
     print(f"  Total compute : {economics.total_gflops:,.0f} GFLOP")
+    print(f"  Utilization   : {economics.observed_utilization * 100:.2f}% of peak compute capacity")
     print(f"  Energy saved  : {economics.terrestrial_energy_kwh:,.2f} kWh")
     print(f"  Carbon offset : {economics.carbon_offset_kg:,.2f} kg CO2")
     print(f"  OpEx savings  : ${economics.operational_energy_savings_usd:,.2f}")
     print(f"  Cooling value : ${economics.cooling_premium_usd:,.2f}")
     print(f"  GPU rental $  : ${economics.terrestrial_rental_usd:,.2f}")
     print(f"  CapEx total   : ${economics.space_capex_usd:,.0f}")
+    print(f"  Compute CapEx : ${economics.compute_capex_usd:,.0f}")
+    print("--- Fleet CapEx lens (full constellation) ---")
     print(f"  Cost / GFLOP  : ${economics.cost_per_gflop_usd:.6g}")
-    print(f"  Break-even    : {economics.break_even_months:.1f} months")
+    print(f"  Break-even    : {_format_months(economics.break_even_months)}")
+    print("--- Utilized-compute lens (compute nodes @ observed utilization) ---")
+    print(f"  Cost / GFLOP  : ${economics.utilized_cost_per_gflop_usd:.6g}")
+    print(f"  Break-even    : {_format_months(economics.utilized_break_even_months)}")
     print(f"  Net value     : ${economics.net_value_usd:,.2f}")
     print(f"  ROI ratio     : {economics.roi_ratio:.3f}")
 

@@ -286,10 +286,27 @@ def test_economics_reports_tco_metrics():
     assert economics.terrestrial_rental_usd >= 0.0
     assert economics.space_capex_usd > 0.0
     assert economics.launch_capex_usd > 0.0
+    assert economics.compute_capex_usd > 0.0
+    assert economics.compute_capex_usd <= economics.space_capex_usd
     assert economics.cooling_premium_usd >= 0.0
     assert economics.operational_energy_savings_usd >= 0.0
     assert economics.break_even_months > 0.0
-    assert "break_even_months" in economics.as_dict()
+    assert economics.utilized_cost_per_gflop_usd > 0.0
+    assert economics.utilized_break_even_months > 0.0
+    assert 0.0 <= economics.observed_utilization <= 1.0
+    assert "utilized_cost_per_gflop_usd" in economics.as_dict()
+
+
+def test_presets_load():
+    from orbicloud_sim.presets import PRESET_NAMES, load_preset
+
+    for name in PRESET_NAMES:
+        config = load_preset(name)
+        assert config.constellation.walker.altitude_km > 0
+        assert config.num_steps >= 1
+
+    with pytest.raises(ValueError):
+        load_preset("not_a_real_preset")
 
 
 def test_short_simulation_produces_telemetry():

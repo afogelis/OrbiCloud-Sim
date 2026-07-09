@@ -373,31 +373,51 @@ def render_telemetry(result: SimulationResult) -> go.Figure:
 
 
 def render_economics(economics: EconomicsResult) -> go.Figure:
-    """Compare unit compute cost and terrestrial impacts avoided.
+    """Compare terrestrial vs orbital unit cost under fleet and utilized lenses."""
 
-    Short simulation windows make absolute USD savings look tiny next to amortized
-    constellation CapEx. Unit cost ($/GFLOP) and physical offsets (kWh, kg CO2,
-    OpEx, cooling premium) show the operational benefit without that scale mismatch.
-    """
-
-    terrestrial_cost_per_gflop, space_cost_per_gflop = _unit_costs(economics)
-    break_even = economics.break_even_months
-    break_even_text = "∞" if math.isinf(break_even) else f"{break_even:.1f} months"
+    terrestrial, fleet, utilized = _unit_costs(economics)
+    fleet_be = economics.break_even_months
+    util_be = economics.utilized_break_even_months
+    fleet_be_text = "∞" if math.isinf(fleet_be) else f"{fleet_be / 12.0:.0f} yr"
+    util_be_text = "∞" if math.isinf(util_be) else f"{util_be:.1f} mo"
 
     fig = make_subplots(
         rows=1,
         cols=2,
-        subplot_titles=("Cost per GFLOP", "Impact avoided this run"),
-        column_widths=[0.48, 0.52],
+        subplot_titles=(
+            "Cost per GFLOP (dual lens)",
+            "Impact avoided this run",
+        ),
+        column_widths=[0.52, 0.48],
         horizontal_spacing=0.12,
     )
 
-    fig.add_trace(_cost_per_gflop_trace(terrestrial_cost_per_gflop, space_cost_per_gflop), row=1, col=1)
+    fig.add_trace(
+        go.Bar(
+            x=["Terrestrial", "Orbital\n(fleet CapEx)", "Orbital\n(utilized compute)"],
+            y=[terrestrial, fleet, utilized],
+            marker=dict(
+                color=[COLOR_RELAY, COLOR_COMPUTE_THROTTLED, COLOR_COMPUTE_OK],
+                line=dict(width=0),
+            ),
+            text=[f"${terrestrial:.2e}", f"${fleet:.2e}", f"${utilized:.2e}"],
+            textposition="outside",
+            textfont=dict(color=MUTED, size=11),
+            hovertemplate="%{x}<br>$%{y:.3e} / GFLOP<extra></extra>",
+            showlegend=False,
+            name="Cost / GFLOP",
+        ),
+        row=1,
+        col=1,
+    )
     fig.add_trace(_impact_trace(economics), row=1, col=2)
 
     fig.update_layout(
         **_base_layout(
-            title=f"Space vs terrestrial economics · break-even {break_even_text}",
+            title=(
+                f"Space vs terrestrial economics · fleet BE {fleet_be_text} · "
+                f"utilized BE {util_be_text}"
+            ),
             height=420,
             margin=dict(l=48, r=24, t=72, b=48),
         )
@@ -409,21 +429,24 @@ def render_economics(economics: EconomicsResult) -> go.Figure:
     return fig
 
 
-def _unit_costs(economics: EconomicsResult) -> tuple[float, float]:
+def _unit_costs(economics: EconomicsResult) -> tuple[float, float, float]:
     if economics.total_gflops <= 0:
-        return float("nan"), float("nan")
+        return float("nan"), float("nan"), float("nan")
     terrestrial = (
         economics.terrestrial_rental_usd + economics.operational_energy_savings_usd
     ) / economics.total_gflops
-    return terrestrial, economics.cost_per_gflop_usd
+    return terrestrial, economics.cost_per_gflop_usd, economics.utilized_cost_per_gflop_usd
 
 
-def _cost_per_gflop_trace(terrestrial: float, orbital: float) -> go.Bar:
+def _cost_per_gflop_trace(terrestrial: float, fleet: float, utilized: float) -> go.Bar:
     return go.Bar(
-        x=["Terrestrial", "Orbital"],
-        y=[terrestrial, orbital],
-        marker=dict(color=[COLOR_RELAY, COLOR_COMPUTE_OK], line=dict(width=0)),
-        text=[f"${terrestrial:.2e}", f"${orbital:.2e}"],
+        x=["Terrestrial", "Fleet CapEx", "Utilized"],
+        y=[terrestrial, fleet, utilized],
+        marker=dict(
+            color=[COLOR_RELAY, COLOR_COMPUTE_THROTTLED, COLOR_COMPUTE_OK],
+            line=dict(width=0),
+        ),
+        text=[f"${terrestrial:.2e}", f"${fleet:.2e}", f"${utilized:.2e}"],
         textposition="outside",
         textfont=dict(color=MUTED, size=11),
         hovertemplate="%{x}<br>$%{y:.3e} / GFLOP<extra></extra>",
@@ -468,7 +491,7 @@ def render_dashboard(result: SimulationResult, economics: EconomicsResult, step:
 
     globe = render_globe(result, step)
     telem = render_telemetry(result)
-    terrestrial_cost, orbital_cost = _unit_costs(economics)
+    terrestrial_cost, fleet_cost, utilized_cost = _unit_costs(economics)
 
     fig = make_subplots(
         rows=2,
@@ -481,7 +504,7 @@ def render_dashboard(result: SimulationResult, economics: EconomicsResult, step:
         row_heights=[0.5, 0.5],
         subplot_titles=(
             f"Constellation · step {step}",
-            "Cost per GFLOP",
+            "Cost per GFLOP (dual lens)",
             "Telemetry",
         ),
         vertical_spacing=0.10,
@@ -490,7 +513,9 @@ def render_dashboard(result: SimulationResult, economics: EconomicsResult, step:
 
     for trace in globe.data:
         fig.add_trace(trace, row=1, col=1)
-    fig.add_trace(_cost_per_gflop_trace(terrestrial_cost, orbital_cost), row=1, col=2)
+    fig.add_trace(
+        _cost_per_gflop_trace(terrestrial_cost, fleet_cost, utilized_cost), row=1, col=2
+    )
     for trace in telem.data:
         fig.add_trace(trace, row=2, col=2)
 
