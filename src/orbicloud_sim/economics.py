@@ -29,6 +29,7 @@ class EconomicsResult:
     carbon_offset_kg: float
     grid_cost_saved_usd: float
     carbon_value_usd: float
+    terrestrial_rental_usd: float
     space_capex_usd: float
     space_compute_cost_usd: float
     cost_per_gflop_usd: float
@@ -39,12 +40,25 @@ class EconomicsResult:
         return asdict(self)
 
 
+def _compute_seconds(gflops: float, econ: EconomicConfig) -> float:
+    """Wall-clock seconds a reference terrestrial GPU needs for ``gflops`` of work."""
+
+    return (gflops / GFLOP_PER_TFLOP) / econ.terrestrial_gpu_tflops
+
+
 def _terrestrial_energy_kwh(gflops: float, econ: EconomicConfig) -> float:
     """Energy a terrestrial datacenter would burn to execute ``gflops`` of work."""
 
-    seconds = (gflops / GFLOP_PER_TFLOP) / econ.terrestrial_gpu_tflops
+    seconds = _compute_seconds(gflops, econ)
     energy_wh = econ.terrestrial_gpu_power_w * seconds * econ.datacenter_pue / 3600.0
     return energy_wh / WH_PER_KWH
+
+
+def _terrestrial_rental_usd(gflops: float, econ: EconomicConfig) -> float:
+    """Cloud GPU rental cost for the same work at the configured hourly rate."""
+
+    hours = _compute_seconds(gflops, econ) / 3600.0
+    return hours * econ.terrestrial_gpu_rental_usd_per_hour
 
 
 def _space_capex_usd(result: SimulationResult) -> float:
@@ -81,6 +95,7 @@ class EconomicsModel:
         carbon_offset_kg = terrestrial_energy_kwh * self.econ.grid_carbon_kg_per_kwh
         grid_cost_saved_usd = terrestrial_energy_kwh * self.econ.grid_cost_per_kwh_usd
         carbon_value_usd = (carbon_offset_kg / KG_PER_TON) * self.econ.carbon_price_per_ton_usd
+        terrestrial_rental_usd = _terrestrial_rental_usd(total_gflops, self.econ)
 
         space_capex_usd = _space_capex_usd(result)
         lifetime_s = self.econ.satellite_lifetime_years * SECONDS_PER_YEAR
@@ -90,9 +105,12 @@ class EconomicsModel:
         cost_per_gflop_usd = (
             space_compute_cost_usd / total_gflops if total_gflops > 0 else float("inf")
         )
-        net_value_usd = grid_cost_saved_usd + carbon_value_usd - space_compute_cost_usd
+        # Value of orbital compute time is benchmarked against avoided grid energy,
+        # carbon pricing, and the equivalent terrestrial GPU rental bill.
+        terrestrial_value_usd = grid_cost_saved_usd + carbon_value_usd + terrestrial_rental_usd
+        net_value_usd = terrestrial_value_usd - space_compute_cost_usd
         roi_ratio = (
-            (grid_cost_saved_usd + carbon_value_usd) / space_compute_cost_usd
+            terrestrial_value_usd / space_compute_cost_usd
             if space_compute_cost_usd > 0
             else float("inf")
         )
@@ -104,6 +122,7 @@ class EconomicsModel:
             carbon_offset_kg=carbon_offset_kg,
             grid_cost_saved_usd=grid_cost_saved_usd,
             carbon_value_usd=carbon_value_usd,
+            terrestrial_rental_usd=terrestrial_rental_usd,
             space_capex_usd=space_capex_usd,
             space_compute_cost_usd=space_compute_cost_usd,
             cost_per_gflop_usd=cost_per_gflop_usd,

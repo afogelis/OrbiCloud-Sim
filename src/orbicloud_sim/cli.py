@@ -1,21 +1,24 @@
 """Command-line entry point for OrbiCloud-Sim.
 
-Runs a headless simulation with the default (or lightly overridden) scenario and
-prints the techno-economic summary. Useful for smoke-testing the core without
-launching the Streamlit dashboard.
+Runs a headless simulation, prints the techno-economic summary, and optionally
+writes Tableau-ready CSV tables to an output directory.
 """
 
 from __future__ import annotations
 
 import argparse
+from pathlib import Path
 
 from .config import default_simulation_config
 from .economics import EconomicsModel
+from .export import export_tableau_csvs
 from .network_router import run_simulation
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Run an OrbiCloud-Sim scenario headlessly.")
+    parser = argparse.ArgumentParser(
+        description="Run an OrbiCloud-Sim scenario and optionally export Tableau CSVs."
+    )
     parser.add_argument("--planes", type=int, default=None, help="Override number of orbital planes.")
     parser.add_argument(
         "--per-plane", type=int, default=None, help="Override satellites per plane."
@@ -26,6 +29,12 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--timestep-s", type=float, default=None, help="Override sampling timestep in seconds."
+    )
+    parser.add_argument(
+        "--output",
+        type=Path,
+        default=None,
+        help="Directory for Tableau CSV exports (scenario, telemetry, node_states, economics, ...).",
     )
     return parser
 
@@ -51,16 +60,26 @@ def main(argv: list[str] | None = None) -> int:
 
     summary = EconomicsModel(config).constellation_summary(result)
     print("OrbiCloud-Sim run complete")
-    print(f"  Constellation : {summary['total']} sats "
-          f"({summary['compute_nodes']} compute / {summary['relay_nodes']} relay)")
+    print(
+        f"  Constellation : {summary['total']} sats "
+        f"({summary['compute_nodes']} compute / {summary['relay_nodes']} relay)"
+    )
     print(f"  Timesteps     : {len(result.telemetry)}")
     print(f"  Jobs routed   : {economics.jobs_completed}")
     print(f"  Total compute : {economics.total_gflops:,.0f} GFLOP")
     print(f"  Energy saved  : {economics.terrestrial_energy_kwh:,.2f} kWh")
     print(f"  Carbon offset : {economics.carbon_offset_kg:,.2f} kg CO2")
+    print(f"  GPU rental $  : ${economics.terrestrial_rental_usd:,.2f}")
     print(f"  Cost / GFLOP  : ${economics.cost_per_gflop_usd:.6g}")
     print(f"  Net value     : ${economics.net_value_usd:,.2f}")
     print(f"  ROI ratio     : {economics.roi_ratio:.3f}")
+
+    if args.output is not None:
+        written = export_tableau_csvs(result, economics, args.output)
+        print(f"  Tableau CSVs  : {args.output.resolve()}")
+        for name in written:
+            print(f"    - {name}")
+
     return 0
 
 

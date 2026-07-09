@@ -53,13 +53,23 @@ class NodeState:
         return self.battery_wh / self.profile.battery_capacity_wh
 
     def is_compute_eligible(self) -> bool:
-        """A compute node may accept work only when cool enough and charged enough."""
+        """A compute node may accept work only when cool enough and charged enough.
+
+        Optimal duty (no soft routing penalty) additionally requires either
+        eclipse (effective passive cooling) or a high state of charge.
+        """
 
         if self.role is not NodeRole.COMPUTE:
             return False
         thermal_ok = self.temperature_c <= self.profile.thermal_threshold_c
         battery_ok = self.battery_fraction >= self.profile.min_battery_fraction
         return thermal_ok and battery_ok
+
+    def is_thermally_optimal(self, preferred_battery_fraction: float = 0.80) -> bool:
+        """True when eclipse cooling or high SoC makes the node preferred for compute."""
+
+        high_soc = self.battery_fraction >= preferred_battery_fraction
+        return self.in_eclipse or high_soc
 
 
 @dataclass
@@ -251,7 +261,12 @@ def find_compute_route(
             continue
 
         eligible = state.is_compute_eligible()
-        penalty = 0.0 if eligible else config.routing.infeasible_penalty_s
+        if not eligible:
+            penalty = config.routing.infeasible_penalty_s
+        elif not state.is_thermally_optimal(config.routing.preferred_battery_fraction):
+            penalty = config.routing.suboptimal_thermal_penalty_s
+        else:
+            penalty = 0.0
         cost = up_len + down_len + penalty
         if cost >= best_cost:
             continue

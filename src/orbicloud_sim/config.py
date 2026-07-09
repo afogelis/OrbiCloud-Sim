@@ -26,6 +26,9 @@ class SatelliteHardwareConfig(BaseModel):
     Power figures are instantaneous draws in watts; energy storage is in
     watt-hours. Thermal state is modeled with a first-order lumped-capacitance
     model, so a heat capacity and radiator sink power are required.
+
+    This model is the Phase 1 ``SatelliteNode`` hardware contract: battery
+    capacity, compute power, and thermal threshold are validated fields here.
     """
 
     role: NodeRole = Field(description="Functional role of this node class.")
@@ -163,6 +166,23 @@ class RoutingConfig(BaseModel):
         default=1.0e6,
         description="Latency penalty (s) added when routing to an ineligible compute node.",
     )
+    suboptimal_thermal_penalty_s: float = Field(
+        gt=0,
+        default=0.05,
+        description=(
+            "Soft latency penalty (s) for eligible compute nodes that are sunlit "
+            "and below preferred_battery_fraction (suboptimal thermal/power conditions)."
+        ),
+    )
+    preferred_battery_fraction: float = Field(
+        ge=0,
+        le=1,
+        default=0.80,
+        description=(
+            "State-of-charge at or above which a sunlit compute node is treated as "
+            "thermally/power-optimal for routing preference."
+        ),
+    )
 
 
 class EconomicConfig(BaseModel):
@@ -189,6 +209,11 @@ class EconomicConfig(BaseModel):
     )
     carbon_price_per_ton_usd: float = Field(
         ge=0, default=85.0, description="Carbon price applied to offset CO2, USD per metric ton."
+    )
+    terrestrial_gpu_rental_usd_per_hour: float = Field(
+        gt=0,
+        default=2.50,
+        description="Reference cloud GPU rental rate (e.g. H100-class), USD per hour.",
     )
 
 
@@ -219,6 +244,10 @@ class SimulationConfig(BaseModel):
     @property
     def num_steps(self) -> int:
         return max(1, int(self.duration_s // self.timestep_s))
+
+
+# Phase 1 plan nomenclature: SatelliteNode is the hardware profile for a node class.
+SatelliteNode = SatelliteHardwareConfig
 
 
 def default_compute_profile() -> SatelliteHardwareConfig:

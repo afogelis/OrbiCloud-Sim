@@ -12,22 +12,26 @@ from orbicloud_sim.config import (
     default_compute_profile,
     default_simulation_config,
 )
-from orbicloud_sim.network_router import (
-    GROUND_NODE_ID,
-    NodeState,
-    find_compute_route,
-    init_states,
-    line_of_sight,
-)
 from orbicloud_sim.orbital_engine import (
     EARTH_RADIUS_KM,
     build_timescale,
     build_tle,
     generate_walker_delta,
     is_in_eclipse,
+    is_sunlit,
     mean_motion_rev_per_day,
     propagate,
     sun_unit_vector_eci,
+)
+from orbicloud_sim.economics import EconomicsModel
+from orbicloud_sim.export import export_tableau_csvs
+from orbicloud_sim.network_router import (
+    GROUND_NODE_ID,
+    NodeState,
+    find_compute_route,
+    init_states,
+    line_of_sight,
+    run_simulation,
 )
 
 
@@ -123,6 +127,14 @@ def test_no_eclipse_when_offset_beyond_earth_radius(timescale):
     assert is_in_eclipse(point, epoch) is False
 
 
+def test_is_sunlit_matches_eclipse_complement(timescale):
+    config = default_simulation_config()
+    epoch = timescale.from_datetime(config.epoch)
+    sats = generate_walker_delta(config.constellation, timescale, epoch)
+    sat = sats[0]
+    assert is_sunlit(sat, epoch) is (not is_in_eclipse(propagate(sats, epoch)[sat.sat_id], epoch))
+
+
 def test_line_of_sight_blocked_through_earth():
     a = np.array([EARTH_RADIUS_KM + 500.0, 0.0, 0.0])
     b = np.array([-(EARTH_RADIUS_KM + 500.0), 0.0, 0.0])
@@ -164,6 +176,38 @@ def test_routing_prefers_eligible_compute_node(timescale):
     assert route.compute_node_id == b_id
 
 
+def test_routing_prefers_eclipse_over_sunlit_suboptimal(timescale):
+    config = default_simulation_config()
+    epoch = timescale.from_datetime(config.epoch)
+    sats = generate_walker_delta(config.constellation, timescale, epoch)
+    states = init_states(sats)
+
+    import networkx as nx
+
+    compute_ids = [s.sat_id for s in sats if s.role is NodeRole.COMPUTE][:2]
+    a_id, b_id = compute_ids
+
+    # Both eligible, but A is sunlit with low-ish SoC; B is in eclipse.
+    states[a_id].in_eclipse = False
+    states[a_id].battery_wh = states[a_id].profile.battery_capacity_wh * 0.50
+    states[a_id].temperature_c = 20.0
+    states[b_id].in_eclipse = True
+    states[b_id].battery_wh = states[b_id].profile.battery_capacity_wh * 0.50
+    states[b_id].temperature_c = 20.0
+
+    graph = nx.Graph()
+    graph.add_node(GROUND_NODE_ID, role="ground")
+    graph.add_node(a_id, role=NodeRole.COMPUTE)
+    graph.add_node(b_id, role=NodeRole.COMPUTE)
+    # Make A slightly closer so without the soft penalty it would win.
+    graph.add_edge(GROUND_NODE_ID, a_id, distance_km=300.0, latency_s=300.0 / 299792.458)
+    graph.add_edge(GROUND_NODE_ID, b_id, distance_km=400.0, latency_s=400.0 / 299792.458)
+
+    route = find_compute_route(graph, states, config)
+    assert route.feasible is True
+    assert route.compute_node_id == b_id
+
+
 def test_node_state_eligibility_rules():
     profile = default_compute_profile()
     state = NodeState(
@@ -181,3 +225,58 @@ def test_node_state_eligibility_rules():
     state.temperature_c = 20.0
     state.battery_wh = profile.battery_capacity_wh * (profile.min_battery_fraction / 2.0)
     assert state.is_compute_eligible() is False
+
+
+def test_economics_reports_energy_and_rental_value():
+    config = default_simulation_config()
+    config.duration_s = 120.0
+    config.timestep_s = 60.0
+    config.constellation.walker.num_planes = 4
+    config.constellation.walker.sats_per_plane = 10
+    result = run_simulation(config)
+    economics = EconomicsModel(config).evaluate(result)
+
+    assert economics.jobs_completed >= 0
+    assert economics.terrestrial_energy_kwh >= 0.0
+    assert economics.terrestrial_rental_usd >= 0.0
+    assert economics.space_capex_usd > 0.0
+    assert "terrestrial_rental_usd" in economics.as_dict()
+
+
+def test_short_simulation_produces_telemetry():
+    config = default_simulation_config()
+    config.duration_s = 180.0
+    config.timestep_s = 60.0
+    config.constellation.walker.num_planes = 4
+    config.constellation.walker.sats_per_plane = 10
+    result = run_simulation(config)
+    assert len(result.telemetry) == 3
+    assert len(result.snapshots) == 3
+    assert {"delivered_gflops", "route_feasible", "mean_battery_fraction"}.issubset(
+        result.telemetry.columns
+    )
+
+
+def test_tableau_export_writes_expected_csvs(tmp_path):
+    config = default_simulation_config()
+    config.duration_s = 120.0
+    config.timestep_s = 60.0
+    config.constellation.walker.num_planes = 4
+    config.constellation.walker.sats_per_plane = 10
+    result = run_simulation(config)
+    economics = EconomicsModel(config).evaluate(result)
+    written = export_tableau_csvs(result, economics, tmp_path)
+
+    expected = {
+        "scenario.csv",
+        "satellites.csv",
+        "telemetry.csv",
+        "node_states.csv",
+        "routes.csv",
+        "economics_summary.csv",
+        "economics_breakdown.csv",
+    }
+    assert set(written) == expected
+    for path in written.values():
+        assert path.exists()
+        assert path.stat().st_size > 0

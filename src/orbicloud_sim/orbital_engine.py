@@ -274,6 +274,26 @@ def is_in_eclipse(position_km: np.ndarray, t: Time) -> bool:
     return float(np.linalg.norm(perpendicular)) < EARTH_RADIUS_KM
 
 
+def is_sunlit(
+    satellite: Satellite | EarthSatellite,
+    t: Time,
+    ephemeris: object | None = None,
+) -> bool:
+    """Return True if the satellite is in direct sunlight at time ``t``.
+
+    When a Skyfield planetary ``ephemeris`` (e.g. ``de421.bsp``) is supplied,
+    this delegates to Skyfield's ``Geocentric.is_sunlit(ephemeris)``. Without an
+    ephemeris, the cylindrical Earth-shadow model is used so the simulator stays
+    offline-capable.
+    """
+
+    body = satellite.body if isinstance(satellite, Satellite) else satellite
+    if ephemeris is not None:
+        return bool(body.at(t).is_sunlit(ephemeris))
+    position_km = np.asarray(body.at(t).position.km, dtype=float)
+    return not is_in_eclipse(position_km, t)
+
+
 def build_timescale() -> Timescale:
     """Return a Skyfield timescale using built-in data (no network access)."""
 
