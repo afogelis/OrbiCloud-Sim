@@ -4,24 +4,15 @@ from __future__ import annotations
 
 import math
 
+import networkx as nx
 import numpy as np
 import pytest
 
 from orbicloud_sim.config import (
     NodeRole,
+    ThermalConfig,
     default_compute_profile,
     default_simulation_config,
-)
-from orbicloud_sim.orbital_engine import (
-    EARTH_RADIUS_KM,
-    build_timescale,
-    build_tle,
-    generate_walker_delta,
-    is_in_eclipse,
-    is_sunlit,
-    mean_motion_rev_per_day,
-    propagate,
-    sun_unit_vector_eci,
 )
 from orbicloud_sim.economics import EconomicsModel
 from orbicloud_sim.export import export_results
@@ -32,6 +23,19 @@ from orbicloud_sim.network_router import (
     init_states,
     line_of_sight,
     run_simulation,
+)
+from orbicloud_sim.orbital_engine import (
+    EARTH_RADIUS_KM,
+    build_timescale,
+    build_tle,
+    celsius_to_kelvin,
+    generate_walker_delta,
+    integrate_thermal_mass,
+    is_in_eclipse,
+    is_sunlit,
+    mean_motion_rev_per_day,
+    propagate,
+    sun_unit_vector_eci,
 )
 
 
@@ -135,6 +139,29 @@ def test_is_sunlit_matches_eclipse_complement(timescale):
     assert is_sunlit(sat, epoch) is (not is_in_eclipse(propagate(sats, epoch)[sat.sat_id], epoch))
 
 
+def test_thermal_mass_heats_under_compute_and_clamps():
+    thermal = ThermalConfig()
+    hot = integrate_thermal_mass(
+        thermal.initial_temperature_k,
+        is_sunlit_now=True,
+        is_computing=True,
+        dt_s=60.0,
+        thermal=thermal,
+    )
+    assert hot > thermal.initial_temperature_k
+    assert hot <= thermal.structural_max_k
+
+    cold = integrate_thermal_mass(
+        thermal.initial_temperature_k,
+        is_sunlit_now=False,
+        is_computing=False,
+        dt_s=600.0,
+        thermal=thermal,
+    )
+    assert cold < thermal.initial_temperature_k
+    assert cold >= thermal.storage_floor_k
+
+
 def test_line_of_sight_blocked_through_earth():
     a = np.array([EARTH_RADIUS_KM + 500.0, 0.0, 0.0])
     b = np.array([-(EARTH_RADIUS_KM + 500.0), 0.0, 0.0])
@@ -151,57 +178,74 @@ def test_routing_prefers_eligible_compute_node(timescale):
     config = default_simulation_config()
     epoch = timescale.from_datetime(config.epoch)
     sats = generate_walker_delta(config.constellation, timescale, epoch)
-    states = init_states(sats)
-
-    # Build a tiny hand-made graph: ground -> A (throttled) and ground -> B (ok).
-    import networkx as nx
+    states = init_states(sats, config.thermal)
 
     compute_ids = [s.sat_id for s in sats if s.role is NodeRole.COMPUTE][:2]
     assert len(compute_ids) == 2
     a_id, b_id = compute_ids
 
     # Force A ineligible (overheated) and B eligible.
-    states[a_id].temperature_c = states[a_id].profile.thermal_threshold_c + 50.0
-    states[b_id].temperature_c = 10.0
+    states[a_id].temperature_k = states[a_id].profile.thermal_threshold_k + 50.0
+    states[b_id].temperature_k = celsius_to_kelvin(10.0)
 
     graph = nx.Graph()
     graph.add_node(GROUND_NODE_ID, role="ground")
     graph.add_node(a_id, role=NodeRole.COMPUTE)
     graph.add_node(b_id, role=NodeRole.COMPUTE)
-    graph.add_edge(GROUND_NODE_ID, a_id, distance_km=300.0, latency_s=300.0 / 299792.458)
-    graph.add_edge(GROUND_NODE_ID, b_id, distance_km=900.0, latency_s=900.0 / 299792.458)
+    graph.add_edge(
+        GROUND_NODE_ID,
+        a_id,
+        distance_km=300.0,
+        latency_s=300.0 / 299792.458,
+        weight=300.0,
+    )
+    graph.add_edge(
+        GROUND_NODE_ID,
+        b_id,
+        distance_km=900.0,
+        latency_s=900.0 / 299792.458,
+        weight=900.0,
+    )
 
     route = find_compute_route(graph, states, config)
     assert route.feasible is True
     assert route.compute_node_id == b_id
 
 
-def test_routing_prefers_eclipse_over_sunlit_suboptimal(timescale):
+def test_health_penalty_avoids_hot_node(timescale):
     config = default_simulation_config()
     epoch = timescale.from_datetime(config.epoch)
     sats = generate_walker_delta(config.constellation, timescale, epoch)
-    states = init_states(sats)
-
-    import networkx as nx
+    states = init_states(sats, config.thermal)
 
     compute_ids = [s.sat_id for s in sats if s.role is NodeRole.COMPUTE][:2]
     a_id, b_id = compute_ids
 
-    # Both eligible, but A is sunlit with low-ish SoC; B is in eclipse.
-    states[a_id].in_eclipse = False
-    states[a_id].battery_wh = states[a_id].profile.battery_capacity_wh * 0.50
-    states[a_id].temperature_c = 20.0
-    states[b_id].in_eclipse = True
-    states[b_id].battery_wh = states[b_id].profile.battery_capacity_wh * 0.50
-    states[b_id].temperature_c = 20.0
+    # Both eligible, but A is near the thermal warning band; B is cool.
+    states[a_id].temperature_k = states[a_id].profile.thermal_threshold_k * 0.95
+    states[a_id].battery_wh = states[a_id].profile.battery_capacity_wh
+    states[b_id].temperature_k = celsius_to_kelvin(20.0)
+    states[b_id].battery_wh = states[b_id].profile.battery_capacity_wh
 
     graph = nx.Graph()
     graph.add_node(GROUND_NODE_ID, role="ground")
     graph.add_node(a_id, role=NodeRole.COMPUTE)
     graph.add_node(b_id, role=NodeRole.COMPUTE)
-    # Make A slightly closer so without the soft penalty it would win.
-    graph.add_edge(GROUND_NODE_ID, a_id, distance_km=300.0, latency_s=300.0 / 299792.458)
-    graph.add_edge(GROUND_NODE_ID, b_id, distance_km=400.0, latency_s=400.0 / 299792.458)
+    # A is closer in physical distance, but health weight should make B win.
+    graph.add_edge(
+        GROUND_NODE_ID,
+        a_id,
+        distance_km=300.0,
+        latency_s=300.0 / 299792.458,
+        weight=300.0 * config.routing.health_penalty_multiplier,
+    )
+    graph.add_edge(
+        GROUND_NODE_ID,
+        b_id,
+        distance_km=400.0,
+        latency_s=400.0 / 299792.458,
+        weight=400.0,
+    )
 
     route = find_compute_route(graph, states, config)
     assert route.feasible is True
@@ -210,24 +254,25 @@ def test_routing_prefers_eclipse_over_sunlit_suboptimal(timescale):
 
 def test_node_state_eligibility_rules():
     profile = default_compute_profile()
+    thermal = ThermalConfig()
     state = NodeState(
         sat_id=0,
         role=NodeRole.COMPUTE,
         profile=profile,
         battery_wh=profile.battery_capacity_wh,
-        temperature_c=20.0,
+        temperature_k=thermal.initial_temperature_k,
     )
     assert state.is_compute_eligible() is True
 
-    state.temperature_c = profile.thermal_threshold_c + 1.0
+    state.temperature_k = profile.thermal_threshold_k + 1.0
     assert state.is_compute_eligible() is False
 
-    state.temperature_c = 20.0
+    state.temperature_k = thermal.initial_temperature_k
     state.battery_wh = profile.battery_capacity_wh * (profile.min_battery_fraction / 2.0)
     assert state.is_compute_eligible() is False
 
 
-def test_economics_reports_energy_and_rental_value():
+def test_economics_reports_tco_metrics():
     config = default_simulation_config()
     config.duration_s = 120.0
     config.timestep_s = 60.0
@@ -240,7 +285,11 @@ def test_economics_reports_energy_and_rental_value():
     assert economics.terrestrial_energy_kwh >= 0.0
     assert economics.terrestrial_rental_usd >= 0.0
     assert economics.space_capex_usd > 0.0
-    assert "terrestrial_rental_usd" in economics.as_dict()
+    assert economics.launch_capex_usd > 0.0
+    assert economics.cooling_premium_usd >= 0.0
+    assert economics.operational_energy_savings_usd >= 0.0
+    assert economics.break_even_months > 0.0
+    assert "break_even_months" in economics.as_dict()
 
 
 def test_short_simulation_produces_telemetry():

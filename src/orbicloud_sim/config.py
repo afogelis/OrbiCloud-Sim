@@ -20,15 +20,51 @@ class NodeRole(str, Enum):
     RELAY = "relay"
 
 
+class ThermalConfig(BaseModel):
+    """Thermodynamic mass-accumulator parameters (Kelvin-based rates)."""
+
+    space_background_k: float = Field(
+        default=3.0, ge=0, description="Cosmic microwave background / deep-space sink, kelvin."
+    )
+    storage_floor_k: float = Field(
+        default=250.0, gt=0, description="Minimum clamped structural temperature, kelvin."
+    )
+    structural_max_k: float = Field(
+        default=360.0, gt=0, description="Maximum clamped operational temperature, kelvin."
+    )
+    solar_heating_k_per_s: float = Field(
+        default=0.5, ge=0, description="Temperature rise rate while sunlit, kelvin per second."
+    )
+    compute_heating_k_per_s: float = Field(
+        default=2.0, ge=0, description="Temperature rise rate while executing AI compute, K/s."
+    )
+    radiative_cooling_coeff_per_s: float = Field(
+        default=0.008,
+        gt=0,
+        description=(
+            "Linear radiative cooling coefficient: dT/dt includes "
+            "-coeff * (T - T_space), per second."
+        ),
+    )
+    initial_temperature_k: float = Field(
+        default=293.15, gt=0, description="Initial node temperature at simulation start, kelvin."
+    )
+
+    @model_validator(mode="after")
+    def _check_bounds(self) -> ThermalConfig:
+        if self.storage_floor_k >= self.structural_max_k:
+            raise ValueError("storage_floor_k must be strictly below structural_max_k.")
+        if not (self.storage_floor_k <= self.initial_temperature_k <= self.structural_max_k):
+            raise ValueError("initial_temperature_k must lie within [storage_floor_k, structural_max_k].")
+        return self
+
+
 class SatelliteHardwareConfig(BaseModel):
     """Hardware profile for a single class of satellite node.
 
     Power figures are instantaneous draws in watts; energy storage is in
-    watt-hours. Thermal state is modeled with a first-order lumped-capacitance
-    model, so a heat capacity and radiator sink power are required.
-
-    This model is the Phase 1 ``SatelliteNode`` hardware contract: battery
-    capacity, compute power, and thermal threshold are validated fields here.
+    watt-hours. Thermal evolution uses the constellation-level ``ThermalConfig``
+    mass accumulator; ``thermal_threshold_c`` remains the compute throttle limit.
     """
 
     role: NodeRole = Field(description="Functional role of this node class.")
@@ -52,24 +88,9 @@ class SatelliteHardwareConfig(BaseModel):
         ge=0, le=1, description="State-of-charge floor below which the node refuses compute jobs."
     )
 
-    # Thermal (first-order lumped model).
-    heat_capacity_j_per_k: float = Field(
-        gt=0, description="Lumped thermal capacitance of the node in joules per kelvin."
-    )
+    # Thermal throttle (display / eligibility still in Celsius for dashboards).
     thermal_threshold_c: float = Field(
         description="Maximum die/radiator temperature in Celsius before compute is throttled."
-    )
-    radiative_cooling_w: float = Field(
-        gt=0, description="Passive radiator heat-rejection power in watts (peak, in eclipse)."
-    )
-    solar_heat_load_w: float = Field(
-        ge=0, description="External solar heat absorbed by the structure while in sunlight, in watts."
-    )
-    compute_heat_fraction: float = Field(
-        default=0.95,
-        ge=0,
-        le=1,
-        description="Fraction of compute_draw_w that is dissipated as heat into the node.",
     )
 
     # Networking.
@@ -82,6 +103,10 @@ class SatelliteHardwareConfig(BaseModel):
     hardware_cost_usd: float = Field(
         gt=0, description="Bill-of-materials + integration cost of the satellite, in USD."
     )
+
+    @property
+    def thermal_threshold_k(self) -> float:
+        return self.thermal_threshold_c + 273.15
 
     @model_validator(mode="after")
     def _check_compute_consistency(self) -> SatelliteHardwareConfig:
@@ -148,7 +173,7 @@ class RoutingConfig(BaseModel):
     """Parameters that shape the inter-satellite link graph and pathfinding."""
 
     atmosphere_margin_km: float = Field(
-        default=80.0,
+        default=100.0,
         ge=0,
         description="Earth-occlusion margin: links whose chord passes below R_earth + this are blocked.",
     )
@@ -161,32 +186,33 @@ class RoutingConfig(BaseModel):
         default=10.0,
         description="Minimum elevation angle above the local horizon for a usable ground link.",
     )
-    infeasible_penalty_s: float = Field(
-        gt=0,
-        default=1.0e6,
-        description="Latency penalty (s) added when routing to an ineligible compute node.",
-    )
-    suboptimal_thermal_penalty_s: float = Field(
-        gt=0,
-        default=0.05,
-        description=(
-            "Soft latency penalty (s) for eligible compute nodes that are sunlit "
-            "and below preferred_battery_fraction (suboptimal thermal/power conditions)."
-        ),
-    )
-    preferred_battery_fraction: float = Field(
+    health_battery_floor: float = Field(
+        default=0.20,
         ge=0,
         le=1,
-        default=0.80,
-        description=(
-            "State-of-charge at or above which a sunlit compute node is treated as "
-            "thermally/power-optimal for routing preference."
-        ),
+        description="Battery fraction below which ISL edges into a node are heavily penalized.",
+    )
+    health_thermal_fraction: float = Field(
+        default=0.90,
+        ge=0,
+        le=1,
+        description="Fraction of thermal_threshold above which ISL edges into a node are heavily penalized.",
+    )
+    health_penalty_multiplier: float = Field(
+        default=1000.0,
+        gt=1.0,
+        description="Distance multiplier applied to edges targeting unhealthy nodes.",
+    )
+    critical_battery_fraction: float = Field(
+        default=0.05,
+        ge=0,
+        le=1,
+        description="Battery fraction at or below which the node is treated as dead (no ISL edges).",
     )
 
 
 class EconomicConfig(BaseModel):
-    """Techno-economic constants for the Space-vs-Terrestrial comparison."""
+    """Techno-economic constants for CapEx / OpEx TCO comparison."""
 
     grid_cost_per_kwh_usd: float = Field(gt=0, default=0.12, description="Terrestrial grid price, USD/kWh.")
     grid_carbon_kg_per_kwh: float = Field(
@@ -202,10 +228,10 @@ class EconomicConfig(BaseModel):
         ge=1.0, default=1.5, description="Power Usage Effectiveness of the terrestrial datacenter."
     )
     launch_cost_per_kg_usd: float = Field(
-        gt=0, default=2700.0, description="Amortized launch cost to LEO, USD/kg."
+        gt=0, default=1500.0, description="Rideshare launch cost to LEO, USD/kg."
     )
     satellite_lifetime_years: float = Field(
-        gt=0, default=5.0, description="Operational lifetime over which capex is amortized."
+        gt=0, default=5.0, description="Operational lifetime over which CapEx is amortized."
     )
     carbon_price_per_ton_usd: float = Field(
         ge=0, default=85.0, description="Carbon price applied to offset CO2, USD per metric ton."
@@ -231,6 +257,7 @@ class SimulationConfig(BaseModel):
     ground_station: GroundStationConfig
     routing: RoutingConfig = Field(default_factory=RoutingConfig)
     economics: EconomicConfig = Field(default_factory=EconomicConfig)
+    thermal: ThermalConfig = Field(default_factory=ThermalConfig)
 
     workload_gflops: float = Field(
         gt=0,
@@ -262,11 +289,7 @@ def default_compute_profile() -> SatelliteHardwareConfig:
         compute_draw_w=1400.0,
         solar_charge_w=2500.0,
         min_battery_fraction=0.25,
-        heat_capacity_j_per_k=45000.0,
         thermal_threshold_c=75.0,
-        radiative_cooling_w=2200.0,
-        solar_heat_load_w=900.0,
-        compute_heat_fraction=0.95,
         isl_bandwidth_gbps=100.0,
         max_isl_range_km=5000.0,
         hardware_cost_usd=4.5e6,
@@ -285,11 +308,7 @@ def default_relay_profile() -> SatelliteHardwareConfig:
         compute_draw_w=0.0,
         solar_charge_w=1500.0,
         min_battery_fraction=0.15,
-        heat_capacity_j_per_k=18000.0,
         thermal_threshold_c=85.0,
-        radiative_cooling_w=900.0,
-        solar_heat_load_w=400.0,
-        compute_heat_fraction=0.9,
         isl_bandwidth_gbps=200.0,
         max_isl_range_km=5500.0,
         hardware_cost_usd=8.0e5,

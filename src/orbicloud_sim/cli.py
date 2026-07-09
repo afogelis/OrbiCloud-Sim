@@ -75,8 +75,12 @@ def main(argv: list[str] | None = None) -> int:
     print(f"  Total compute : {economics.total_gflops:,.0f} GFLOP")
     print(f"  Energy saved  : {economics.terrestrial_energy_kwh:,.2f} kWh")
     print(f"  Carbon offset : {economics.carbon_offset_kg:,.2f} kg CO2")
+    print(f"  OpEx savings  : ${economics.operational_energy_savings_usd:,.2f}")
+    print(f"  Cooling value : ${economics.cooling_premium_usd:,.2f}")
     print(f"  GPU rental $  : ${economics.terrestrial_rental_usd:,.2f}")
+    print(f"  CapEx total   : ${economics.space_capex_usd:,.0f}")
     print(f"  Cost / GFLOP  : ${economics.cost_per_gflop_usd:.6g}")
+    print(f"  Break-even    : {economics.break_even_months:.1f} months")
     print(f"  Net value     : ${economics.net_value_usd:,.2f}")
     print(f"  ROI ratio     : {economics.roi_ratio:.3f}")
 

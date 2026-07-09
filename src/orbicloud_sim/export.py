@@ -103,8 +103,16 @@ def economics_breakdown_frame(economics: EconomicsResult) -> pd.DataFrame:
 
     return pd.DataFrame(
         [
-            {"metric": "grid_cost_saved_usd", "label": "Grid cost saved", "value_usd": economics.grid_cost_saved_usd},
-            {"metric": "carbon_value_usd", "label": "Carbon value", "value_usd": economics.carbon_value_usd},
+            {
+                "metric": "operational_energy_savings_usd",
+                "label": "OpEx energy savings",
+                "value_usd": economics.operational_energy_savings_usd,
+            },
+            {
+                "metric": "cooling_premium_usd",
+                "label": "Cooling premium",
+                "value_usd": economics.cooling_premium_usd,
+            },
             {
                 "metric": "terrestrial_rental_usd",
                 "label": "GPU rental avoided",
@@ -112,7 +120,7 @@ def economics_breakdown_frame(economics: EconomicsResult) -> pd.DataFrame:
             },
             {
                 "metric": "space_compute_cost_usd",
-                "label": "Space compute cost",
+                "label": "Amortized CapEx (window)",
                 "value_usd": economics.space_compute_cost_usd,
             },
             {"metric": "net_value_usd", "label": "Net value", "value_usd": economics.net_value_usd},

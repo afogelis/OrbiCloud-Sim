@@ -17,15 +17,22 @@ from skyfield.api import EarthSatellite, load, wgs84
 from skyfield.framelib import itrs
 from skyfield.timelib import Time, Timescale
 
-from .config import ConstellationConfig, GroundStationConfig, NodeRole, SatelliteHardwareConfig
+from .config import (
+    ConstellationConfig,
+    GroundStationConfig,
+    NodeRole,
+    SatelliteHardwareConfig,
+    ThermalConfig,
+)
 
 # Physical constants (named to avoid magic numbers in the logic below).
-EARTH_RADIUS_KM: float = 6378.137  # WGS-84 equatorial radius
+EARTH_RADIUS_KM: float = 6371.0  # Mean Earth radius used for occlusion / orbit sizing
 EARTH_MU_KM3_S2: float = 398600.4418  # Standard gravitational parameter
 SECONDS_PER_DAY: float = 86400.0
 OBLIQUITY_DEG: float = 23.439291  # Mean obliquity of the ecliptic (J2000)
 J2000_JD: float = 2451545.0
 JULIAN_CENTURY_DAYS: float = 36525.0
+KELVIN_OFFSET_C: float = 273.15
 
 
 @dataclass(frozen=True)
@@ -312,23 +319,72 @@ def is_in_eclipse(position_km: np.ndarray, t: Time) -> bool:
 
 
 def is_sunlit(
-    satellite: Satellite | EarthSatellite,
+    satellite: Satellite | EarthSatellite | np.ndarray,
     t: Time,
     ephemeris: object | None = None,
 ) -> bool:
-    """Return True if the satellite is in direct sunlight at time ``t``.
+    """Return True if the satellite (or ECI position) is in direct sunlight at ``t``.
 
-    When a Skyfield planetary ``ephemeris`` (e.g. ``de421.bsp``) is supplied,
-    this delegates to Skyfield's ``Geocentric.is_sunlit(ephemeris)``. Without an
-    ephemeris, the cylindrical Earth-shadow model is used so the simulator stays
-    offline-capable.
+    When a Skyfield planetary ``ephemeris`` (e.g. ``de421.bsp``) is supplied and
+    ``satellite`` is an ``EarthSatellite`` / ``Satellite``, this delegates to
+    Skyfield's ``Geocentric.is_sunlit(ephemeris)``. Otherwise the cylindrical
+    Earth-shadow model is used so the simulator stays offline-capable.
     """
+
+    if isinstance(satellite, np.ndarray):
+        return not is_in_eclipse(np.asarray(satellite, dtype=float), t)
 
     body = satellite.body if isinstance(satellite, Satellite) else satellite
     if ephemeris is not None:
         return bool(body.at(t).is_sunlit(ephemeris))
     position_km = np.asarray(body.at(t).position.km, dtype=float)
     return not is_in_eclipse(position_km, t)
+
+
+def integrate_thermal_mass(
+    temperature_k: float,
+    *,
+    is_sunlit_now: bool,
+    is_computing: bool,
+    dt_s: float,
+    thermal: ThermalConfig,
+) -> float:
+    """Advance lumped thermal mass by ``dt_s`` using the configured rate model.
+
+    Heating terms (solar flux while sunlit, internal AI compute dissipation) are
+    additive. Passive cooling is linear in the temperature delta to deep space:
+    ``dT/dt = solar + compute - coeff * (T - T_space)``. The result is clamped
+    to ``[storage_floor_k, structural_max_k]``.
+    """
+
+    if dt_s < 0.0:
+        raise ValueError("dt_s must be non-negative.")
+
+    heating_k_per_s = 0.0
+    if is_sunlit_now:
+        heating_k_per_s += thermal.solar_heating_k_per_s
+    if is_computing:
+        heating_k_per_s += thermal.compute_heating_k_per_s
+
+    cooling_k_per_s = thermal.radiative_cooling_coeff_per_s * (
+        temperature_k - thermal.space_background_k
+    )
+    next_temperature_k = temperature_k + (heating_k_per_s - cooling_k_per_s) * dt_s
+    return float(
+        np.clip(next_temperature_k, thermal.storage_floor_k, thermal.structural_max_k)
+    )
+
+
+def kelvin_to_celsius(temperature_k: float) -> float:
+    """Convert kelvin to Celsius."""
+
+    return temperature_k - KELVIN_OFFSET_C
+
+
+def celsius_to_kelvin(temperature_c: float) -> float:
+    """Convert Celsius to kelvin."""
+
+    return temperature_c + KELVIN_OFFSET_C
 
 
 def build_timescale() -> Timescale:

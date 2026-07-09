@@ -6,6 +6,7 @@ return Plotly figures. No physics or routing logic lives here.
 
 from __future__ import annotations
 
+import math
 from functools import lru_cache
 from importlib import resources
 from pathlib import Path
@@ -375,11 +376,13 @@ def render_economics(economics: EconomicsResult) -> go.Figure:
     """Compare unit compute cost and terrestrial impacts avoided.
 
     Short simulation windows make absolute USD savings look tiny next to amortized
-    constellation capex. Unit cost ($/GFLOP) and physical offsets (kWh, kg CO2)
-    show the operational benefit without that scale mismatch.
+    constellation CapEx. Unit cost ($/GFLOP) and physical offsets (kWh, kg CO2,
+    OpEx, cooling premium) show the operational benefit without that scale mismatch.
     """
 
     terrestrial_cost_per_gflop, space_cost_per_gflop = _unit_costs(economics)
+    break_even = economics.break_even_months
+    break_even_text = "∞" if math.isinf(break_even) else f"{break_even:.1f} months"
 
     fig = make_subplots(
         rows=1,
@@ -394,7 +397,7 @@ def render_economics(economics: EconomicsResult) -> go.Figure:
 
     fig.update_layout(
         **_base_layout(
-            title="Space vs terrestrial economics",
+            title=f"Space vs terrestrial economics · break-even {break_even_text}",
             height=420,
             margin=dict(l=48, r=24, t=72, b=48),
         )
@@ -409,7 +412,9 @@ def render_economics(economics: EconomicsResult) -> go.Figure:
 def _unit_costs(economics: EconomicsResult) -> tuple[float, float]:
     if economics.total_gflops <= 0:
         return float("nan"), float("nan")
-    terrestrial = (economics.terrestrial_rental_usd + economics.grid_cost_saved_usd) / economics.total_gflops
+    terrestrial = (
+        economics.terrestrial_rental_usd + economics.operational_energy_savings_usd
+    ) / economics.total_gflops
     return terrestrial, economics.cost_per_gflop_usd
 
 
@@ -429,17 +434,22 @@ def _cost_per_gflop_trace(terrestrial: float, orbital: float) -> go.Bar:
 
 def _impact_trace(economics: EconomicsResult) -> go.Bar:
     return go.Bar(
-        x=["Energy (kWh)", "Carbon (kg CO₂)", "GPU rental (USD)"],
+        x=["Energy (kWh)", "Carbon (kg CO₂)", "OpEx saved ($)", "Cooling premium ($)"],
         y=[
             economics.terrestrial_energy_kwh,
             economics.carbon_offset_kg,
-            economics.terrestrial_rental_usd,
+            economics.operational_energy_savings_usd,
+            economics.cooling_premium_usd,
         ],
-        marker=dict(color=[COLOR_COMPUTE_OK, COLOR_RELAY, COLOR_GROUND], line=dict(width=0)),
+        marker=dict(
+            color=[COLOR_COMPUTE_OK, COLOR_RELAY, COLOR_GROUND, COLOR_COMPUTE_THROTTLED],
+            line=dict(width=0),
+        ),
         text=[
             f"{economics.terrestrial_energy_kwh:.2f}",
             f"{economics.carbon_offset_kg:.2f}",
-            f"${economics.terrestrial_rental_usd:.2f}",
+            f"${economics.operational_energy_savings_usd:.2f}",
+            f"${economics.cooling_premium_usd:.2f}",
         ],
         textposition="outside",
         textfont=dict(color=MUTED, size=11),
