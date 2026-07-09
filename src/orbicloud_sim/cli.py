@@ -1,7 +1,7 @@
 """Command-line entry point for OrbiCloud-Sim.
 
 Runs a headless simulation, prints the techno-economic summary, and optionally
-writes Tableau-ready CSV tables to an output directory.
+writes CSV tables plus Plotly HTML visualizations to an output directory.
 """
 
 from __future__ import annotations
@@ -11,13 +11,13 @@ from pathlib import Path
 
 from .config import default_simulation_config
 from .economics import EconomicsModel
-from .export import export_tableau_csvs
+from .export import export_results
 from .network_router import run_simulation
 
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="Run an OrbiCloud-Sim scenario and optionally export Tableau CSVs."
+        description="Run an OrbiCloud-Sim scenario and optionally export results."
     )
     parser.add_argument("--planes", type=int, default=None, help="Override number of orbital planes.")
     parser.add_argument(
@@ -34,7 +34,13 @@ def build_parser() -> argparse.ArgumentParser:
         "--output",
         type=Path,
         default=None,
-        help="Directory for Tableau CSV exports (scenario, telemetry, node_states, economics, ...).",
+        help="Directory for CSV tables and HTML visualizations.",
+    )
+    parser.add_argument(
+        "--viz-step",
+        type=int,
+        default=0,
+        help="Snapshot step index used for the 3D globe visualization.",
     )
     return parser
 
@@ -75,8 +81,8 @@ def main(argv: list[str] | None = None) -> int:
     print(f"  ROI ratio     : {economics.roi_ratio:.3f}")
 
     if args.output is not None:
-        written = export_tableau_csvs(result, economics, args.output)
-        print(f"  Tableau CSVs  : {args.output.resolve()}")
+        written = export_results(result, economics, args.output, step=args.viz_step)
+        print(f"  Outputs       : {args.output.resolve()}")
         for name in written:
             print(f"    - {name}")
 

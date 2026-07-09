@@ -1,7 +1,7 @@
-"""Tableau-oriented CSV exporters for OrbiCloud-Sim.
+"""CSV and HTML exporters for OrbiCloud-Sim.
 
-Simulation and economics results are written as flat tables that Tableau Desktop
-or Tableau Prep can connect to directly. No presentation logic lives here.
+Simulation and economics results are written as flat tables plus Plotly HTML
+charts. No physics or routing logic lives here.
 """
 
 from __future__ import annotations
@@ -12,6 +12,7 @@ import pandas as pd
 
 from .economics import EconomicsResult
 from .network_router import GROUND_NODE_ID, SimulationResult
+from .visualizers import write_visualizations
 
 
 def satellites_frame(result: SimulationResult) -> pd.DataFrame:
@@ -42,7 +43,7 @@ def telemetry_frame(result: SimulationResult) -> pd.DataFrame:
 
 
 def node_states_frame(result: SimulationResult) -> pd.DataFrame:
-    """Per-timestep, per-satellite state for spatial and thermal views in Tableau."""
+    """Per-timestep, per-satellite state for spatial and thermal analysis."""
 
     rows: list[dict] = []
     for snapshot in result.snapshots:
@@ -98,7 +99,7 @@ def economics_summary_frame(economics: EconomicsResult) -> pd.DataFrame:
 
 
 def economics_breakdown_frame(economics: EconomicsResult) -> pd.DataFrame:
-    """Long-form value comparison for Tableau bar charts."""
+    """Long-form value comparison for bar charts."""
 
     return pd.DataFrame(
         [
@@ -120,7 +121,7 @@ def economics_breakdown_frame(economics: EconomicsResult) -> pd.DataFrame:
 
 
 def scenario_frame(result: SimulationResult) -> pd.DataFrame:
-    """Scenario parameters for filtering and captions in Tableau."""
+    """Scenario parameters for captions and reproducibility."""
 
     config = result.config
     walker = config.constellation.walker
@@ -146,12 +147,13 @@ def scenario_frame(result: SimulationResult) -> pd.DataFrame:
     )
 
 
-def export_tableau_csvs(
+def export_results(
     result: SimulationResult,
     economics: EconomicsResult,
     output_dir: str | Path,
+    step: int = 0,
 ) -> dict[str, Path]:
-    """Write all Tableau source tables to ``output_dir`` and return their paths."""
+    """Write CSV tables and HTML visualizations to ``output_dir``."""
 
     out = Path(output_dir)
     out.mkdir(parents=True, exist_ok=True)
@@ -171,4 +173,6 @@ def export_tableau_csvs(
         path = out / filename
         frame.to_csv(path, index=False)
         written[filename] = path
+
+    written.update(write_visualizations(result, economics, out, step=step))
     return written

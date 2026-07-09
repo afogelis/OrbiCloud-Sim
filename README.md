@@ -2,8 +2,8 @@
 
 OrbiCloud-Sim is a Python simulation and techno-economic framework for
 space-based data centers. It models a Low Earth Orbit (LEO) constellation that
-executes AI compute workloads in orbit and exports flat CSV tables for analysis
-and dashboarding in Tableau.
+executes AI compute workloads in orbit and writes CSV tables plus interactive
+HTML visualizations for analysis.
 
 The simulator couples four concerns:
 
@@ -24,13 +24,15 @@ flowchart LR
     cfg --> rt["network_router.py<br/>ISL graph + state machine"]
     orb --> rt
     rt --> econ["economics.py<br/>cost / carbon / ROI"]
-    rt --> exp["export.py<br/>Tableau CSV tables"]
+    rt --> viz["visualizers.py<br/>Plotly globe + charts"]
+    econ --> viz
+    rt --> exp["export.py<br/>CSV + HTML outputs"]
     econ --> exp
-    exp --> tab["Tableau Desktop<br/>dashboard workbook"]
+    viz --> exp
 ```
 
-Business logic lives in `src/orbicloud_sim/`. Visualization is performed in
-Tableau from the exported CSVs; see `tableau/README.md`.
+Business logic lives in `src/orbicloud_sim/`. Presentation is limited to Plotly
+HTML figures written beside the CSV exports.
 
 ## Project layout
 
@@ -41,10 +43,9 @@ OrbiCloud-Sim/
 │   ├── orbital_engine.py    # Skyfield Walker-Delta TLE synthesis + eclipse detection
 │   ├── network_router.py    # NetworkX ISL graph, node state machine, run_simulation
 │   ├── economics.py         # Cost-per-GFLOP + carbon-offset model
-│   ├── export.py            # Tableau-ready CSV writers
+│   ├── visualizers.py       # Plotly 3D globe and metric charts
+│   ├── export.py            # CSV tables + HTML visualization writers
 │   └── cli.py               # Headless runner (orbicloud)
-├── tableau/
-│   └── README.md            # How to connect Tableau to the CSV exports
 ├── tests/test_orbital.py
 ├── pyproject.toml
 └── README.md
@@ -64,15 +65,15 @@ so no external TLE catalog or JPL ephemeris download is required.
 
 ## Usage
 
-Run a scenario and write Tableau source tables:
+Run a scenario and write results:
 
 ```bash
-orbicloud --planes 8 --per-plane 12 --altitude-km 550 --duration-s 6000 --output output/tableau
+orbicloud --planes 8 --per-plane 12 --altitude-km 550 --duration-s 6000 --output output/run
 ```
 
-Then open Tableau Desktop, connect to the CSVs under `output/tableau/`, and build
-the dashboard. Table schemas and suggested sheet layouts are documented in
-`tableau/README.md`.
+Open `output/run/dashboard.html` in a browser for the combined globe, economics,
+and telemetry view. Individual charts are also written as `globe.html`,
+`telemetry.html`, and `economics.html`, alongside CSV tables for further analysis.
 
 Omit `--output` to print only the console summary:
 

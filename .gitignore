@@ -21,7 +21,7 @@ htmlcov/
 *.bsp
 finals2000A.all
 
-# Simulation / Tableau exports
+# Simulation outputs
 output/
 
 # OS / editor

@@ -24,7 +24,7 @@ from orbicloud_sim.orbital_engine import (
     sun_unit_vector_eci,
 )
 from orbicloud_sim.economics import EconomicsModel
-from orbicloud_sim.export import export_tableau_csvs
+from orbicloud_sim.export import export_results
 from orbicloud_sim.network_router import (
     GROUND_NODE_ID,
     NodeState,
@@ -257,7 +257,7 @@ def test_short_simulation_produces_telemetry():
     )
 
 
-def test_tableau_export_writes_expected_csvs(tmp_path):
+def test_export_writes_csvs_and_html_visualizations(tmp_path):
     config = default_simulation_config()
     config.duration_s = 120.0
     config.timestep_s = 60.0
@@ -265,7 +265,7 @@ def test_tableau_export_writes_expected_csvs(tmp_path):
     config.constellation.walker.sats_per_plane = 10
     result = run_simulation(config)
     economics = EconomicsModel(config).evaluate(result)
-    written = export_tableau_csvs(result, economics, tmp_path)
+    written = export_results(result, economics, tmp_path)
 
     expected = {
         "scenario.csv",
@@ -275,6 +275,10 @@ def test_tableau_export_writes_expected_csvs(tmp_path):
         "routes.csv",
         "economics_summary.csv",
         "economics_breakdown.csv",
+        "dashboard.html",
+        "globe.html",
+        "telemetry.html",
+        "economics.html",
     }
     assert set(written) == expected
     for path in written.values():

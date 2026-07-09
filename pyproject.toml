@@ -32,6 +32,7 @@ dependencies = [
     "pydantic>=2.5",
     "skyfield>=1.46",
     "networkx>=3.1",
+    "plotly>=5.18",
 ]
 
 [project.optional-dependencies]
