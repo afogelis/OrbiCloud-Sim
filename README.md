@@ -121,6 +121,41 @@ Omit `--output` to print only the console summary:
 orbicloud --planes 8 --per-plane 8 --altitude-km 550 --duration-s 6000
 ```
 
+## Baseline results (550 km)
+
+The following metrics were produced by a headless run of
+`default_simulation_config()` (not hand-tuned):
+
+| Parameter | Value |
+|-----------|-------|
+| Orbit | 550 km, 53° inclination, Walker 8×12 (96 sats, 50% compute) |
+| Ground station | Cape Canaveral (28.39°N, 80.60°W) |
+| Window | 6000 s (100 steps × 60 s) |
+| Launch CapEx | $1500/kg rideshare |
+| Lifetime | 5 years |
+| Terrestrial reference | 67 TFLOP/s GPU, 700 W, PUE 1.5, $0.12/kWh, $2.50/h rental |
+
+| Metric | Result |
+|--------|--------|
+| Jobs routed | 88 / 100 timesteps (88% feasible) |
+| Delivered compute | 3.54×10⁸ GFLOP |
+| Mean route latency | 19.2 ms |
+| Facility energy avoided | 1.54 kWh |
+| Carbon offset | 0.62 kg CO₂ |
+| OpEx energy savings (IT + cooling premium) | $0.18 |
+| GPU rental avoided | $3.67 |
+| Constellation CapEx (hardware + launch) | $362.4 M |
+| **Cost per GFLOP (orbital, window-amortized)** | **$3.90×10⁻⁵** |
+| **Break-even horizon** | **~2.12×10⁵ months (~17,650 years)** |
+
+Under these baseline assumptions the break-even horizon is CapEx-dominated:
+a full 96-satellite constellation (~$362 M) is amortized against OpEx savings
+from roughly one terrestrial GPU-hour of work per simulated hour. Cost per
+GFLOP and break-even therefore reflect constellation-scale investment, not
+single-node operating cost. Longer duty cycles, denser workloads, or smaller
+constellations move both metrics; re-run `orbicloud` with altered
+`--planes` / `--per-plane` / `--duration-s` to regenerate the table.
+
 ## Dashboard screenshots
 
 Combined dashboard (globe, economics, and telemetry):
