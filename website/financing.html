@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Financing · Shane's Auto Sales</title>
+  <meta name="description" content="Get pre-approved for a used car loan at Shane's Auto Sales in Sherman Oaks. All credit considered.">
+  <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500&family=IBM+Plex+Mono:wght@400;500&family=Manrope:wght@400;500;650;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+  <div id="site-header"></div>
+  <main id="content" class="wrap">
+    <header class="page-hero">
+      <p class="kicker">English / Español</p>
+      <h1>
+        <span data-en>Pre-approval before you stand on the lot.</span>
+        <span data-es>Preaprobación antes de llegar al lote.</span>
+      </h1>
+      <p>
+        <span data-en>Shane's works with multiple lenders. Excellent credit, rebuilding credit, or a first-time note — the desk shops the file instead of handing you a single take-it-or-leave-it rate. This form is a demo; the live dealership still takes applications by phone at (818) 451-9099.</span>
+        <span data-es>Shane's trabaja con varios prestamistas. Crédito excelente, en reconstrucción o primer auto. Este formulario es una demo; el lote real sigue tomando solicitudes por teléfono al (818) 451-9099.</span>
+      </p>
+    </header>
+
+    <div class="credit-bands">
+      <article>
+        <h3>
+          <span data-en>Prime</span>
+          <span data-es>Prime</span>
+        </h3>
+        <p class="muted">
+          <span data-en>Cleaner files get shopped for rate and term. Bring a pay stub and ID if you already know the car.</span>
+          <span data-es>Los expedientes más limpios se cotizan por tasa y plazo. Trae un talón de pago y una identificación si ya sabes el auto.</span>
+        </p>
+      </article>
+      <article>
+        <h3>
+          <span data-en>Rebuilding</span>
+          <span data-es>Reconstrucción</span>
+        </h3>
+        <p class="muted">
+          <span data-en>The live site advertises help for buyers working credit back up. Larger down payments and shorter terms are common.</span>
+          <span data-es>El sitio actual ofrece ayuda a quien está reconstruyendo crédito. Enganches más altos y plazos más cortos son comunes.</span>
+        </p>
+      </article>
+      <article>
+        <h3>
+          <span data-en>In person</span>
+          <span data-es>En persona</span>
+        </h3>
+        <p class="muted">
+          <span data-en>If a form feels like a stall, call. The lot is staffed Mon–Fri 10–7 and Saturday 10–6.</span>
+          <span data-es>Si un formulario se siente como una demora, llama. El lote atiende lun–vie 10–7 y sábado 10–6.</span>
+        </p>
+      </article>
+    </div>
+
+    <div class="form-grid" style="padding-bottom:80px">
+      <form class="stack" data-demo>
+        <label class="field"><span data-i18n="formName">Name</span>
+          <input name="name" required autocomplete="name">
+          <span class="error"></span>
+        </label>
+        <label class="field"><span data-i18n="formEmail">Email</span>
+          <input name="email" type="email" required autocomplete="email">
+          <span class="error"></span>
+        </label>
+        <label class="field"><span data-i18n="formPhone">Phone</span>
+          <input name="phone" type="tel" required autocomplete="tel">
+          <span class="error"></span>
+        </label>
+        <label class="field"><span data-en>Stock # (optional)</span><span data-es>Stock # (opcional)</span>
+          <input name="stock" placeholder="e.g. 7782">
+        </label>
+        <label class="field"><span data-en>Monthly budget</span><span data-es>Presupuesto mensual</span>
+          <select name="budget">
+            <option value="250">Up to $250</option>
+            <option value="350" selected>Up to $350</option>
+            <option value="500">Up to $500</option>
+            <option value="700">$500+</option>
+          </select>
+        </label>
+        <label class="field"><span data-en>Credit self-report</span><span data-es>Autoevaluación de crédito</span>
+          <select name="credit">
+            <option>Excellent</option>
+            <option>Good</option>
+            <option selected>Fair</option>
+            <option>Rebuilding</option>
+          </select>
+        </label>
+        <button class="btn btn-copper" type="submit" data-i18n="formSubmit">Send</button>
+        <div class="alert form-success" hidden></div>
+      </form>
+      <div>
+        <h2>
+          <span data-en>What to bring</span>
+          <span data-es>Qué traer</span>
+        </h2>
+        <div class="feature-list">
+          <article>
+            <h3>ID</h3>
+            <p class="muted">
+              <span data-en>Driver license or state ID. If you are not the only signer, bring the co-buyer too.</span>
+              <span data-es>Licencia o identificación estatal. Si no eres el único firmante, trae también al co-comprador.</span>
+            </p>
+          </article>
+          <article>
+            <h3>
+              <span data-en>Income</span>
+              <span data-es>Ingresos</span>
+            </h3>
+            <p class="muted">
+              <span data-en>Recent pay stubs, or a bank statement if you are self-employed. Lenders ask; the lot cannot skip it.</span>
+              <span data-es>Talones de pago recientes, o un estado de cuenta si trabajas por cuenta propia.</span>
+            </p>
+          </article>
+          <article>
+            <h3>
+              <span data-en>Insurance</span>
+              <span data-es>Seguro</span>
+            </h3>
+            <p class="muted">
+              <span data-en>California requires coverage before you drive off Ventura Blvd. Have an agent ready or ask the desk for referrals.</span>
+              <span data-es>California exige cobertura antes de salir de Ventura Blvd.</span>
+            </p>
+          </article>
+        </div>
+      </div>
+    </div>
+  </main>
+  <div id="site-footer"></div>
+  <script src="js/data.js"></script>
+  <script src="js/app.js"></script>
+  <script src="js/forms.js"></script>
+  <script>
+    ShaneApp.renderHeader("financing");
+    ShaneApp.renderFooter();
+    document.querySelectorAll("[data-i18n]").forEach((el) => {
+      el.textContent = ShaneApp.t(el.getAttribute("data-i18n"));
+    });
+  </script>
+</body>
+</html>

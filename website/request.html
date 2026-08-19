@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Request a car · Shane's Auto Sales</title>
+  <meta name="description" content="Request a specific used car from Shane's Auto Sales in Sherman Oaks if it is not on the lot today.">
+  <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500&family=IBM+Plex+Mono:wght@400;500&family=Manrope:wght@400;500;650;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+  <div id="site-header"></div>
+  <main id="content" class="wrap">
+    <header class="page-hero">
+      <p class="kicker">Request</p>
+      <h1>
+        <span data-en>Tell the desk what you actually want.</span>
+        <span data-es>Dile al escritorio lo que de verdad buscas.</span>
+      </h1>
+      <p>
+        <span data-en>The live site already has a Request a Car page. This version drops the keyword stuffing and asks for make, budget, and a stock number if you already spotted something. Demo only — call (818) 451-9099 to put a hold on a real car.</span>
+        <span data-es>El sitio en vivo ya tiene una página de Request a Car. Esta versión pide marca, presupuesto y un número de stock si ya viste algo. Solo demo: llama al (818) 451-9099 para apartar un auto real.</span>
+      </p>
+    </header>
+
+    <div class="form-grid" style="padding-bottom:80px">
+      <form class="stack" data-demo>
+        <label class="field"><span data-i18n="formName">Name</span>
+          <input name="name" required autocomplete="name">
+          <span class="error"></span>
+        </label>
+        <label class="field"><span data-i18n="formPhone">Phone</span>
+          <input name="phone" type="tel" required autocomplete="tel">
+          <span class="error"></span>
+        </label>
+        <label class="field"><span data-i18n="formEmail">Email</span>
+          <input name="email" type="email" required autocomplete="email">
+          <span class="error"></span>
+        </label>
+        <label class="field"><span data-en>Stock # on the lot (optional)</span><span data-es>Stock # (opcional)</span>
+          <input name="stock" placeholder="7782">
+        </label>
+        <label class="field"><span data-en>Make / model you want</span><span data-es>Marca / modelo</span>
+          <input name="want" placeholder="e.g. Honda CR-V, under $12k">
+        </label>
+        <label class="field"><span data-en>Max price</span><span data-es>Precio máximo</span>
+          <select name="price">
+            <option value="8000">$8,000</option>
+            <option value="12000" selected>$12,000</option>
+            <option value="18000">$18,000</option>
+            <option value="25000">$25,000</option>
+          </select>
+        </label>
+        <label class="field"><span data-i18n="formMessage">Notes</span>
+          <textarea name="message" placeholder="AWD, automatic, no salvage title…"></textarea>
+        </label>
+        <button class="btn btn-copper" type="submit" data-i18n="formSubmit">Send</button>
+        <div class="alert form-success" hidden></div>
+      </form>
+      <div>
+        <h2>
+          <span data-en>If it is already on the site</span>
+          <span data-es>Si ya está en el sitio</span>
+        </h2>
+        <p class="paper-dim" style="margin-top:12px">
+          <span data-en>Skip the wish list. Open the vehicle page, use “I want this car,” or call with the stock number. Inventory in this redesign is a snapshot compiled from public listings and will not match the CRM second-for-second.</span>
+          <span data-es>Si ya lo viste, abre la ficha del vehículo o llama con el número de stock. El inventario de este rediseño es una muestra pública y no coincide segundo a segundo con el CRM.</span>
+        </p>
+        <div class="hero-actions" style="margin-top:20px">
+          <a class="btn btn-ghost" href="inventory.html" data-i18n="viewInventory">Browse inventory</a>
+          <a class="btn btn-copper" href="tel:+18184519099">(818) 451-9099</a>
+        </div>
+      </div>
+    </div>
+  </main>
+  <div id="site-footer"></div>
+  <script src="js/data.js"></script>
+  <script src="js/app.js"></script>
+  <script src="js/forms.js"></script>
+  <script>
+    ShaneApp.renderHeader("request");
+    ShaneApp.renderFooter();
+    document.querySelectorAll("[data-i18n]").forEach((el) => {
+      el.textContent = ShaneApp.t(el.getAttribute("data-i18n"));
+    });
+  </script>
+</body>
+</html>
