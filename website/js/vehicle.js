@@ -1,13 +1,13 @@
 (function () {
   const { vehicles } = window.SHANE;
-  const { t, money, miles, titleOf, vehicleCard, monthlyPayment } = window.ShaneApp;
+  const { t, money, miles, titleOf, photoFor, vehicleCard, monthlyPayment } = window.ShaneApp;
   const id = new URLSearchParams(location.search).get("id");
   const vehicle = vehicles.find((v) => v.id === id) || vehicles[0];
 
   document.title = `${titleOf(vehicle)} · Shane's Auto Sales`;
   document.getElementById("vehicle-root").innerHTML = `
     <div class="gallery">
-      <img src="${vehicle.image}" alt="${titleOf(vehicle)}">
+      <img src="${photoFor(vehicle)}" alt="${titleOf(vehicle)}">
     </div>
     <div>
       <p class="kicker">${vehicle.body} · ${t("stock")} ${vehicle.stock}</p>

@@ -17,6 +17,19 @@
 
   const titleOf = (v) => `${v.year} ${v.make} ${v.model}`;
 
+  function photoFor(v) {
+    if (v.image && !String(v.image).startsWith("http")) return v.image;
+    const light = ["White", "Silver", "Gold", "Yellow", "Green", "Blue"].includes(v.color);
+    if (v.body === "SUV") return light ? "assets/featured-crv.jpg" : "assets/body-suv-dark.jpg";
+    if (v.body === "Sedan") return light ? "assets/body-sedan-silver.jpg" : "assets/body-sedan-dark.jpg";
+    if (v.body === "Convertible") return "assets/body-convertible.jpg";
+    if (v.body === "Truck") return "assets/body-truck.jpg";
+    if (v.body === "Hatchback") return "assets/body-hatch.jpg";
+    if (v.body === "Coupe") return "assets/body-coupe.jpg";
+    if (v.body === "Wagon" || v.body === "Minivan") return "assets/body-van.jpg";
+    return "assets/body-sedan-dark.jpg";
+  }
+
   function openStatus() {
     const now = new Date(
       new Date().toLocaleString("en-US", { timeZone: "America/Los_Angeles" })
@@ -143,7 +156,7 @@
   function vehicleCard(v) {
     return `
       <a class="vehicle-card" href="vehicle.html?id=${encodeURIComponent(v.id)}">
-        <div class="thumb"><img src="${v.image}" alt="${titleOf(v)}" loading="lazy"></div>
+        <div class="thumb"><img src="${photoFor(v)}" alt="${titleOf(v)}" loading="lazy"></div>
         <div class="body">
           <div class="meta"><span>${v.body} · ${v.drivetrain}</span><span>${t("stock")} ${v.stock}</span></div>
           <h3>${titleOf(v)}</h3>
@@ -170,6 +183,7 @@
     money,
     miles,
     titleOf,
+    photoFor,
     openStatus,
     formatHour,
     renderHeader,

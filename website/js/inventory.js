@@ -42,7 +42,7 @@
     else if (sort === "price-desc") list.sort((a, b) => b.price - a.price);
     else if (sort === "miles") list.sort((a, b) => a.miles - b.miles);
     else if (sort === "year") list.sort((a, b) => b.year - a.year);
-    else list.sort((a, b) => Number(b.featured) - Number(a.featured) || a.price - b.price);
+    else list.sort((a, b) => Number(Boolean(b.featured)) - Number(Boolean(a.featured)) || a.price - b.price);
 
     els.count.textContent = `${list.length} ${t("results")}`;
     els.grid.innerHTML = list.length

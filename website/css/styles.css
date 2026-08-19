@@ -7,7 +7,7 @@
   --copper: #d08a45;
   --copper-2: #e9b57a;
   --ink: #0b0c0e;
-  --muted: #9a9286;
+  --muted: #b4ada0;
   --line: rgba(243, 238, 228, 0.12);
   --line-strong: rgba(243, 238, 228, 0.22);
   --ok: #7dba7a;
@@ -372,9 +372,10 @@ textarea {
   padding: 11px 12px;
 }
 
-textarea {
-  min-height: 120px;
-  resize: vertical;
+input[type="range"] {
+  accent-color: var(--copper);
+  width: 100%;
+  background: transparent;
 }
 
 /* Sections */
@@ -819,10 +820,6 @@ html[lang="en"] [data-es] {
   .menu-btn {
     display: inline-flex;
   }
-
-  .header-actions .btn {
-    display: none;
-  }
 }
 
 @media (max-width: 720px) {
@@ -859,6 +856,10 @@ html[lang="en"] [data-es] {
     bottom: 12px;
     z-index: 40;
     justify-content: center;
+  }
+
+  .header-actions .btn-copper {
+    display: none;
   }
 
   .mobile-call .btn {
